@@ -170,11 +170,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     game_update(dt, &global_input, &game_image);
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
 
-    // NOTE(leo): Lock frame rate
+    // NOTE(leo): Lock frame rate and calculate dt
     {
       LARGE_INTEGER now = { 0 };
       QueryPerformanceCounter(&now);
-      F32 dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
+      dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
       int sleep_time = (int)((target_dt - dt)*1000.0f)-1;
       if(sleep_time > 0)
         Sleep(sleep_time);
@@ -182,8 +182,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         QueryPerformanceCounter(&now);
         dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
       } while(dt < target_dt);
+      last_time = now;
     }
 
+#if 0
     local_persist int frame_count;
     local_persist LARGE_INTEGER last_sec = { 0 };
     frame_count++;
@@ -198,11 +200,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       wsprintfA(buffer, "%d.%d\n", (int)fps, (int)((fps-(int)fps)*1000));
       OutputDebugStringA(buffer);
     }
-
-    LARGE_INTEGER end_time = { 0 };
-    QueryPerformanceCounter(&end_time);
-    dt = (F32)(((F64)end_time.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
-    last_time = end_time;
+#endif
   }
 
   // NOTE(leo): Reset scheduler
