@@ -2,7 +2,6 @@
 #include "platform.h"
 
 #include <windows.h>
-#include <dsound.h>
 
 typedef struct Win32ImageBuffer {
   BITMAPINFO info;
@@ -11,16 +10,8 @@ typedef struct Win32ImageBuffer {
   int pitch;
 } Win32ImageBuffer;
 
-typedef struct Win32SoundBuffer {
-  LPDIRECTSOUNDBUFFER ds_buffer;
-  U32 sample_count;
-  U32 size; // NOTE(leo): byte count
-} Win32SoundBuffer;
-
-
 global_variable bool global_running;
 global_variable Win32ImageBuffer global_image_buffer;
-global_variable Win32SoundBuffer global_sound_buffer;
 
 internal void win32_image_buffer_init(U32 width, U32 height)
 {
@@ -41,82 +32,16 @@ internal void win32_image_buffer_init(U32 width, U32 height)
   assert(global_image_buffer.memory);
 }
 
-internal void win32_sound_buffer_init(HWND window, U32 sample_count)
-{
-  typedef HRESULT WINAPI direct_sound_create_proc(LPCGUID pcGuidDevice, LPDIRECTSOUND *ppDS, LPUNKNOWN pUnkOuter);
-
-  // NOTE(leo): Load the library
-  HMODULE lib = LoadLibraryA("dsound.dll");
-  if(!lib) {
-    // TODO(leo): Better error handling
-    MessageBoxA(window, "Direct Sound could not be loaded!", "Warning", MB_OK|MB_ICONWARNING);
-  }
-
-  //NOTE(leo): Load the procedures
-  direct_sound_create_proc *create = (direct_sound_create_proc *)GetProcAddress(lib, "DirectSoundCreate");
-  if(!create) {
-    // TODO(leo): Better error handling
-    OutputDebugStringA("direct_sound_init: A procedure was not found!\n");
-    exit(1);
-  }
-
-  // NOTE(leo): Create direct sound object
-  LPDIRECTSOUND ds;
-  if(!SUCCEEDED(create(0, &ds, NULL))) {
-    // TODO(leo): Better error handling
-    OutputDebugStringA("direct_sound_init: create failed\n");
-    exit(1);
-  }
-  if(!SUCCEEDED(ds->lpVtbl->SetCooperativeLevel(ds, window, DSSCL_PRIORITY))) {
-    // TODO(leo): Better error handling
-    OutputDebugStringA("direct_sound_init: failed to set cooperative level\n");
-    exit(1);
-  }
-
-  // NOTE(leo): Create primary buffer (~handle to sound card)
-  DSBUFFERDESC primary_buffer_description = {
-    .dwSize = sizeof(primary_buffer_description),
-    .dwFlags = DSBCAPS_PRIMARYBUFFER,
-  };
-  LPDIRECTSOUNDBUFFER primary_buffer;
-  if(!SUCCEEDED(ds->lpVtbl->CreateSoundBuffer(ds, &primary_buffer_description, &primary_buffer, 0))) {
-    // TODO(leo): Better error handling
-    OutputDebugStringA("direct_sound_init: failed to create primary buffer\n");
-    exit(1);
-  }
-
-  // NOTE(leo): Set primary buffer wave format
-  WAVEFORMATEX wave_format = {
-    .wFormatTag = WAVE_FORMAT_PCM,
-    .nChannels = PLATFORM_SOUND_BUFFER_CHANNEL_COUNT,
-    .nSamplesPerSec = PLATFORM_SOUND_BUFFER_SAMPLE_FREQUENCY,
-    .wBitsPerSample = PLATFORM_SOUND_BUFFER_BYTES_PER_SAMPLE*8,
-    .cbSize = 0
-  };
-  wave_format.nBlockAlign = wave_format.nChannels*wave_format.wBitsPerSample/8;
-  wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec*wave_format.nBlockAlign,
-  primary_buffer->lpVtbl->SetFormat(primary_buffer, &wave_format);
-
-  // NOTE(leo): Create global sound buffer
-  DSBUFFERDESC sound_buffer_description = {
-    .dwSize = sizeof(sound_buffer_description),
-    .dwBufferBytes = PLATFORM_SOUND_BUFFER_SIZE(sample_count),
-    .lpwfxFormat = &wave_format
-  };
-  if(!SUCCEEDED(ds->lpVtbl->CreateSoundBuffer(ds, &sound_buffer_description, &global_sound_buffer.ds_buffer, 0))) {
-    // TODO(leo): Better error handling
-    OutputDebugStringA("direct_sound_init: failed to create secondary buffer\n");
-    exit(1);
-  }
-  global_sound_buffer.sample_count = sample_count;
-  global_sound_buffer.size = PLATFORM_SOUND_BUFFER_SIZE(sample_count);
-}
+Input global_input;
 
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
   LRESULT result = 0;
   switch(message)
   {
+    case WM_SIZE: {
+      int a;
+    } break;
     case WM_CLOSE: {
       global_running = false;
     } break;
@@ -130,29 +55,20 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
       bool is_down = !(l_param & (1<<31));
       if(was_down == is_down)
         break;
-      if(vk == 'W' || vk == VK_UP) {
-      }
-      else if(vk == 'A' || vk == VK_LEFT) {
-      }
-      else if(vk == 'S' || vk == VK_DOWN) {
+      if(vk == 'A' || vk == VK_LEFT) {
+        global_input.button_left.is_down = is_down;
       }
       else if(vk == 'D' || vk == VK_RIGHT) {
+        global_input.button_right.is_down = is_down;
       }
     } break;
 
     case WM_PAINT: {
-      RECT rect;
-      if(!GetUpdateRect(window, &rect, FALSE))
-        break;
       PAINTSTRUCT paint;
       HDC dc = BeginPaint(window, &paint);
-      int x = rect.left;
-      int y = rect.top;
-      int w = rect.right - rect.left;
-      int h = rect.bottom - rect.top;
       int ret = StretchDIBits(
         dc,
-        x, y, w, h,
+        0, 0, global_image_buffer.width, global_image_buffer.height,
         0, 0, global_image_buffer.width, global_image_buffer.height,
         global_image_buffer.memory,
         &global_image_buffer.info,
@@ -169,7 +85,7 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
   return result;
 }
 
-void game_update(F32 dt, PlatformImageBuffer *image, PlatformSoundBuffer *sound);
+void game_update(F32 dt, Input *input, Image *image);
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, int cmd_show)
 {
@@ -185,13 +101,19 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     ATOM main_window_atom = RegisterClassA(&main_window_class);
     assert(main_window_atom);
 
+    RECT client_rect = { 0 };
+    client_rect.right = 1280;
+    client_rect.bottom = 720;
+    BOOL ret = AdjustWindowRectEx(&client_rect, WS_OVERLAPPEDWINDOW|WS_VISIBLE, FALSE, 0);
+    assert(ret);
+
     main_window = CreateWindowExA(
       0,
       main_window_atom,
       "breakout",
       WS_OVERLAPPEDWINDOW|WS_VISIBLE,
       CW_USEDEFAULT, CW_USEDEFAULT,
-      CW_USEDEFAULT, CW_USEDEFAULT,
+      client_rect.right-client_rect.left, client_rect.bottom-client_rect.top,
       0,
       0,
       instance,
@@ -200,18 +122,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
   }
 
   win32_image_buffer_init(1280, 720);
-  U32 sound_buffer_sample_count = PLATFORM_SOUND_BUFFER_SAMPLE_FREQUENCY*1;
-  win32_sound_buffer_init(main_window, sound_buffer_sample_count);
-  HRESULT ret = global_sound_buffer.ds_buffer->lpVtbl->Play(global_sound_buffer.ds_buffer, 0, 0, DSBPLAY_LOOPING);
-  if(!SUCCEEDED(ret))
-    exit(1);
 
-  S16 *game_sound_buffer_memory = VirtualAlloc(NULL, sound_buffer_sample_count*PLATFORM_SOUND_BUFFER_CHANNEL_COUNT*sizeof(game_sound_buffer_memory[0]), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  LARGE_INTEGER last_time = { 0 };
+  LARGE_INTEGER timer_frequency = { 0 };
+  F32 dt = 0.0f;
+  QueryPerformanceCounter(&last_time);
+  QueryPerformanceFrequency(&timer_frequency);
 
   global_running = true;
-  U32 sample_index = 0;
-  U32 latency_sample_count = global_sound_buffer.sample_count;
   while(global_running) {
+    // NOTE(leo): Handle messages
     MSG message;
     while(PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
       if(message.message==WM_QUIT) {
@@ -222,66 +142,26 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       DispatchMessageA(&message);
     }
 
-    DWORD play_cursor, write_cursor;
-    HRESULT ret = global_sound_buffer.ds_buffer->lpVtbl->GetCurrentPosition(global_sound_buffer.ds_buffer, &play_cursor, &write_cursor);
-    if(!SUCCEEDED(ret))
-      exit(1);
-    U32 lock_pointer = (sample_index*PLATFORM_SOUND_BUFFER_BYTES_PER_SAMPLE*PLATFORM_SOUND_BUFFER_CHANNEL_COUNT) % global_sound_buffer.size;
-    U32 target_pointer = (play_cursor + latency_sample_count*PLATFORM_SOUND_BUFFER_BYTES_PER_SAMPLE) % global_sound_buffer.size;
-    U32 lock_byte_count;
-    if(lock_pointer > target_pointer)
-      lock_byte_count = (global_sound_buffer.size - lock_pointer) + target_pointer;
-    else
-      lock_byte_count = target_pointer - lock_pointer;
+    // NOTE(leo): Clear image
+    for(int y = 0; y < global_image_buffer.height; y++) {
+      for(int x = 0; x < global_image_buffer.width; x++)
+        global_image_buffer.memory[y*global_image_buffer.pitch + x] = 0;
+    }
 
-
-    U32 game_sound_sample_count = lock_byte_count/PLATFORM_SOUND_BUFFER_BYTES_PER_SAMPLE/PLATFORM_SOUND_BUFFER_CHANNEL_COUNT;
-
-    PlatformImageBuffer game_image = {
+    // NOTE(leo): Update game
+    Image game_image = {
       .memory = global_image_buffer.memory,
       .width = global_image_buffer.width,
       .height = global_image_buffer.height,
       .pitch = global_image_buffer.pitch,
     };
-    PlatformSoundBuffer game_sound = {
-      .memory = game_sound_buffer_memory,
-      .sample_count = game_sound_sample_count,
-    };
-    game_update(0.0f, &game_image, &game_sound);
-
-
-    void *ptr1 = NULL, *ptr2 = NULL;
-    DWORD size1 = 0, size2 = 0;
-    if(lock_byte_count) {
-      ret = global_sound_buffer.ds_buffer->lpVtbl->Lock(
-        global_sound_buffer.ds_buffer,
-        lock_pointer,
-        lock_byte_count,
-        &ptr1,
-        &size1,
-        &ptr2,
-        &size2,
-        0
-      );
-      if(!SUCCEEDED(ret))
-        exit(1);
-    }
-
-    U32 sample1_count = size1/PLATFORM_SOUND_BUFFER_BYTES_PER_SAMPLE/PLATFORM_SOUND_BUFFER_CHANNEL_COUNT;
-    U32 sample2_count = size2/PLATFORM_SOUND_BUFFER_BYTES_PER_SAMPLE/PLATFORM_SOUND_BUFFER_CHANNEL_COUNT;
-    S16 *sample = ptr1;
-    for(U32 i = 0; i < sample1_count+sample2_count; i++) {
-      if(i == sample1_count)
-        sample = ptr2;
-      *sample++ = game_sound.memory[2*i];
-      *sample++ = game_sound.memory[2*i+1];
-      sample_index++;
-    }
-    ret = global_sound_buffer.ds_buffer->lpVtbl->Unlock(global_sound_buffer.ds_buffer, ptr1, size1, ptr2, size2);
-    if(!SUCCEEDED(ret))
-      exit(1);
-    //Sleep(5);
+    game_update(dt, &global_input, &game_image);
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
+
+    LARGE_INTEGER end_time = { 0 };
+    QueryPerformanceCounter(&end_time);
+    dt = (F32)(((F64)end_time.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
+    last_time = end_time;
   }
   return 0;
 }

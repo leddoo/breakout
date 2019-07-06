@@ -18,3 +18,5 @@ typedef double F64;
 #define internal static
 #define global_variable static
 #define local_persist static
+
+#define array_count(array) (sizeof(array)/sizeof((array)[0]))
