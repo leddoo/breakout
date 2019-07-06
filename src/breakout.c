@@ -48,8 +48,6 @@ void draw_rectangle(F32 min_x, F32 min_y, F32 max_x, F32 max_y, U32 color, Image
 
 void game_update(F32 dt, Input *input, Image *image)
 {
-  F32 physics_dt = 1.0f/60.0f;
-
   F32 arena_width = 1280;
   F32 arena_height = 720;
 
@@ -82,7 +80,6 @@ void game_update(F32 dt, Input *input, Image *image)
 
   local_persist Block blocks[BLOCK_COUNT_X*BLOCK_COUNT_Y];
 
-  local_persist F32 time_accumulator = 0.0f;
   local_persist initialized = false;
   if(!initialized) {
     initialized = true;
@@ -109,154 +106,149 @@ void game_update(F32 dt, Input *input, Image *image)
     }
   }
 
-  time_accumulator += dt;
-  while(time_accumulator >= physics_dt)
-  {
-    time_accumulator -= physics_dt;
-    // Paddle Friction
-    do {
-      F32 stop_speed = 50.0f;
-      F32 friction = 6.0f;
+  // Paddle Friction
+  do {
+    F32 stop_speed = 50.0f;
+    F32 friction = 6.0f;
 
-      F32 speed = fabsf(paddle_dx);
-      if(speed < 1.0f) {
-        paddle_dx = 0.0f;
-        break;
-      }
-
-      if(speed < stop_speed)
-        speed = stop_speed;
-      F32 drop = speed*friction*physics_dt;
-      F32 new_speed = speed - drop;
-      if(new_speed < 0.0f)
-        new_speed = 0.0f;
-      paddle_dx *= new_speed/speed;
-    } while(false);
-
-    // Paddle Acceleration
-    do {
-      F32 acceleration = 3.5f;
-      F32 wish_dir = 0.0f;
-      if(input->button_left.is_down)
-        wish_dir -= 1.0f;
-      if(input->button_right.is_down)
-        wish_dir += 1.0f;
-
-      F32 current_speed = paddle_dx * wish_dir;
-      F32 add_speed = paddle_max_speed - current_speed;
-      if(add_speed <= 0.0f)
-        break;
-      F32 accelerate_speed = acceleration*paddle_max_speed*physics_dt;
-      if(accelerate_speed > add_speed)
-        accelerate_speed = add_speed;
-
-      paddle_dx += accelerate_speed*wish_dir;
-    } while(false);
-
-    // Integrate paddle position
-    paddle_x = paddle_x + paddle_dx*physics_dt;
-
-    // Keep paddle in bounds
-    if(paddle_x <= 0.0f + paddle_width/2.0f)
-      paddle_x = 0.0f + paddle_width/2.0f;
-    if(paddle_x >= arena_width - paddle_width/2.0f)
-      paddle_x = arena_width - paddle_width/2.0f;
-
-    // Integrate ball position
-    ball_pos = v2_add(ball_pos, v2_smul(physics_dt*ball_speed, ball_direction));
-
-    // Ball - wall interaction
-    //  left
-    if(ball_pos.x < 0.0f + ball_radius) {
-      ball_pos.x = 0.0f + ball_radius;
-      if(ball_direction.x < 0.0f)
-        ball_direction.x = -ball_direction.x;
-    }
-    //  top
-    if(ball_pos.y > arena_height - ball_radius) {
-      ball_pos.y = arena_height - ball_radius;
-      if(ball_direction.y > 0.0f)
-        ball_direction.y = -ball_direction.y;
-    }
-    //  right
-    if(ball_pos.x > arena_width - ball_radius) {
-      ball_pos.x = arena_width - ball_radius;
-      if(ball_direction.x > 0.0f)
-        ball_direction.x = -ball_direction.x;
-    }
-    //  bottom
-    if(ball_pos.y < 0.0f + ball_radius) {
-      ball_pos = initial_ball_pos;
-      ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
-      ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
+    F32 speed = fabsf(paddle_dx);
+    if(speed < 1.0f) {
+      paddle_dx = 0.0f;
+      break;
     }
 
-    // Ball - paddle interaction
-    do {
-      if(ball_pos.x < paddle_x - paddle_width/2.0f - ball_radius)
-        break;
-      if(ball_pos.x > paddle_x + paddle_width/2.0f + ball_radius)
-        break;
-      if(ball_pos.y > paddle_y + paddle_height/2.0f + ball_radius)
-        break;
+    if(speed < stop_speed)
+      speed = stop_speed;
+    F32 drop = speed*friction*dt;
+    F32 new_speed = speed - drop;
+    if(new_speed < 0.0f)
+      new_speed = 0.0f;
+    paddle_dx *= new_speed/speed;
+  } while(false);
+
+  // Paddle Acceleration
+  do {
+    F32 acceleration = 3.5f;
+    F32 wish_dir = 0.0f;
+    if(input->button_left.is_down)
+      wish_dir -= 1.0f;
+    if(input->button_right.is_down)
+      wish_dir += 1.0f;
+
+    F32 current_speed = paddle_dx * wish_dir;
+    F32 add_speed = paddle_max_speed - current_speed;
+    if(add_speed <= 0.0f)
+      break;
+    F32 accelerate_speed = acceleration*paddle_max_speed*dt;
+    if(accelerate_speed > add_speed)
+      accelerate_speed = add_speed;
+
+    paddle_dx += accelerate_speed*wish_dir;
+  } while(false);
+
+  // Integrate paddle position
+  paddle_x = paddle_x + paddle_dx*dt;
+
+  // Keep paddle in bounds
+  if(paddle_x <= 0.0f + paddle_width/2.0f)
+    paddle_x = 0.0f + paddle_width/2.0f;
+  if(paddle_x >= arena_width - paddle_width/2.0f)
+    paddle_x = arena_width - paddle_width/2.0f;
+
+  // Integrate ball position
+  ball_pos = v2_add(ball_pos, v2_smul(dt*ball_speed, ball_direction));
+
+  // Ball - wall interaction
+  //  left
+  if(ball_pos.x < 0.0f + ball_radius) {
+    ball_pos.x = 0.0f + ball_radius;
+    if(ball_direction.x < 0.0f)
+      ball_direction.x = -ball_direction.x;
+  }
+  //  top
+  if(ball_pos.y > arena_height - ball_radius) {
+    ball_pos.y = arena_height - ball_radius;
+    if(ball_direction.y > 0.0f)
+      ball_direction.y = -ball_direction.y;
+  }
+  //  right
+  if(ball_pos.x > arena_width - ball_radius) {
+    ball_pos.x = arena_width - ball_radius;
+    if(ball_direction.x > 0.0f)
+      ball_direction.x = -ball_direction.x;
+  }
+  //  bottom
+  if(ball_pos.y < 0.0f + ball_radius) {
+    ball_pos = initial_ball_pos;
+    ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
+    ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
+  }
+
+  // Ball - paddle interaction
+  do {
+    if(ball_pos.x < paddle_x - paddle_width/2.0f - ball_radius)
+      break;
+    if(ball_pos.x > paddle_x + paddle_width/2.0f + ball_radius)
+      break;
+    if(ball_pos.y > paddle_y + paddle_height/2.0f + ball_radius)
+      break;
+    // left edge
+    if((ball_pos.x < paddle_x - paddle_width/2.0f) && (ball_pos.y < paddle_y + paddle_height/2.0f)) {
+      ball_direction.x = -ball_direction.x;
+      ball_pos.x = paddle_x - paddle_width/2.0f - ball_radius;
+    }
+    // right edge
+    else if((ball_pos.x > paddle_x + paddle_width/2.0f) && (ball_pos.y < paddle_y + paddle_height/2.0f)) {
+      ball_direction.x = -ball_direction.x;
+      ball_pos.x = paddle_x + paddle_width/2.0f + ball_radius;
+    }
+    // top (bottom should be impossible)
+    else {
+      ball_direction.y = -ball_direction.y;
+      ball_pos.y = paddle_y + paddle_height/2.0f + ball_radius;
+    }
+    // Apply friction
+    ball_direction.x += paddle_dx/paddle_max_speed;
+    F32 length = sqrt(ball_direction.x*ball_direction.x + ball_direction.y*ball_direction.y);
+    ball_direction.x /= length;
+    ball_direction.y /= length;
+  } while(false);
+
+  // Ball - block interaction
+  for(int y = 0; y < BLOCK_COUNT_Y; y++) {
+    for(int x = 0; x < BLOCK_COUNT_X; x++) {
+      Block *block = &blocks[y*BLOCK_COUNT_X + x];
+      if(block->dead)
+        continue;
+      if(ball_pos.x < block->pos.x - block_width/2.0f - ball_radius)
+        continue;
+      if(ball_pos.y < block->pos.y - block_height/2.0f - ball_radius)
+        continue;
+      if(ball_pos.x > block->pos.x + block_width/2.0f + ball_radius)
+        continue;
+      if(ball_pos.y > block->pos.y + block_height/2.0f + ball_radius)
+        continue;
+      block->dead = true;
+
       // left edge
-      if((ball_pos.x < paddle_x - paddle_width/2.0f) && (ball_pos.y < paddle_y + paddle_height/2.0f)) {
+      if(ball_pos.x < block->pos.x - block_width/2.0f) {
         ball_direction.x = -ball_direction.x;
-        ball_pos.x = paddle_x - paddle_width/2.0f - ball_radius;
+        ball_pos.x = block->pos.x - block_width/2.0f - ball_radius;
+      }
+      // bottom edge
+      if(ball_pos.y < block->pos.y - block_height/2.0f) {
+        ball_direction.y = -ball_direction.y;
+        ball_pos.y = block->pos.y - block_height/2.0f - ball_radius;
       }
       // right edge
-      else if((ball_pos.x > paddle_x + paddle_width/2.0f) && (ball_pos.y < paddle_y + paddle_height/2.0f)) {
+      if(ball_pos.x > block->pos.x + block_width/2.0f) {
         ball_direction.x = -ball_direction.x;
-        ball_pos.x = paddle_x + paddle_width/2.0f + ball_radius;
+        ball_pos.x = block->pos.x + block_width/2.0f + ball_radius;
       }
-      // top (bottom should be impossible)
-      else {
+      // top edge
+      if(ball_pos.y > block->pos.y + block_height/2.0f) {
         ball_direction.y = -ball_direction.y;
-        ball_pos.y = paddle_y + paddle_height/2.0f + ball_radius;
-      }
-      // Apply friction
-      ball_direction.x += paddle_dx/paddle_max_speed;
-      F32 length = sqrt(ball_direction.x*ball_direction.x + ball_direction.y*ball_direction.y);
-      ball_direction.x /= length;
-      ball_direction.y /= length;
-    } while(false);
-
-    // Ball - block interaction
-    for(int y = 0; y < BLOCK_COUNT_Y; y++) {
-      for(int x = 0; x < BLOCK_COUNT_X; x++) {
-        Block *block = &blocks[y*BLOCK_COUNT_X + x];
-        if(block->dead)
-          continue;
-        if(ball_pos.x < block->pos.x - block_width/2.0f - ball_radius)
-          continue;
-        if(ball_pos.y < block->pos.y - block_height/2.0f - ball_radius)
-          continue;
-        if(ball_pos.x > block->pos.x + block_width/2.0f + ball_radius)
-          continue;
-        if(ball_pos.y > block->pos.y + block_height/2.0f + ball_radius)
-          continue;
-        block->dead = true;
-
-        // left edge
-        if(ball_pos.x < block->pos.x - block_width/2.0f) {
-          ball_direction.x = -ball_direction.x;
-          ball_pos.x = block->pos.x - block_width/2.0f - ball_radius;
-        }
-        // bottom edge
-        if(ball_pos.y < block->pos.y - block_height/2.0f) {
-          ball_direction.y = -ball_direction.y;
-          ball_pos.y = block->pos.y - block_height/2.0f - ball_radius;
-        }
-        // right edge
-        if(ball_pos.x > block->pos.x + block_width/2.0f) {
-          ball_direction.x = -ball_direction.x;
-          ball_pos.x = block->pos.x + block_width/2.0f + ball_radius;
-        }
-        // top edge
-        if(ball_pos.y > block->pos.y + block_height/2.0f) {
-          ball_direction.y = -ball_direction.y;
-          ball_pos.y = block->pos.y + block_height/2.0f + ball_radius;
-        }
+        ball_pos.y = block->pos.y + block_height/2.0f + ball_radius;
       }
     }
   }

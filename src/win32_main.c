@@ -126,8 +126,20 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
   LARGE_INTEGER last_time = { 0 };
   LARGE_INTEGER timer_frequency = { 0 };
   F32 dt = 0.0f;
+  F32 target_dt = 1.0f/60.0f;
   QueryPerformanceCounter(&last_time);
   QueryPerformanceFrequency(&timer_frequency);
+
+  // NOTE(leo): Set scheduler granularity to minimum
+  UINT scheduler_granularity;
+  {
+    TIMECAPS time_caps;
+    MMRESULT ret = timeGetDevCaps(&time_caps, sizeof(time_caps));
+    assert(ret==MMSYSERR_NOERROR);
+    scheduler_granularity = time_caps.wPeriodMin;
+    ret = timeBeginPeriod(scheduler_granularity);
+    assert(ret==TIMERR_NOERROR);
+  }
 
   global_running = true;
   while(global_running) {
@@ -158,10 +170,46 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     game_update(dt, &global_input, &game_image);
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
 
+    // NOTE(leo): Lock frame rate
+    {
+      LARGE_INTEGER now = { 0 };
+      QueryPerformanceCounter(&now);
+      F32 dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
+      int sleep_time = (int)((target_dt - dt)*1000.0f)-1;
+      if(sleep_time > 0)
+        Sleep(sleep_time);
+      do {
+        QueryPerformanceCounter(&now);
+        dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
+      } while(dt < target_dt);
+    }
+
+    local_persist int frame_count;
+    local_persist LARGE_INTEGER last_sec = { 0 };
+    frame_count++;
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    F32 accu = (F32)(((F64)now.QuadPart-(F64)last_sec.QuadPart)/(F64)timer_frequency.QuadPart);
+    if(accu >= 1.0f) {
+      F32 fps = frame_count/accu;
+      frame_count = 0;
+      last_sec = now;
+      char buffer[128];
+      wsprintfA(buffer, "%d.%d\n", (int)fps, (int)((fps-(int)fps)*1000));
+      OutputDebugStringA(buffer);
+    }
+
     LARGE_INTEGER end_time = { 0 };
     QueryPerformanceCounter(&end_time);
     dt = (F32)(((F64)end_time.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
     last_time = end_time;
   }
+
+  // NOTE(leo): Reset scheduler
+  {
+    MMRESULT ret = timeEndPeriod(scheduler_granularity);
+    assert(ret==TIMERR_NOERROR);
+  }
+
   return 0;
 }
