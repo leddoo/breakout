@@ -76,18 +76,6 @@ bool point_inside_rect(V2 point, Rect rect)
 
 void game_update(F32 dt, Input *input, Image *image)
 {
-  /*
-      - wall collision like previously, make thick walls part of surrounding graphics -> arena where ball can move is only the black part of the image
-      - inner arena: 1150x1390      => 111x140
-      - paddle: 72x30               => 7x3
-      - ball: 20x16                 => 2x1.5
-      - brick: 72x20 delta: 12x10   => 7x2, 1x0.8
-      - first brick height: 932     => 90
-      - paddle height: 62           => 6
-      - num bricks: 14x8
-      - brick colors: (0.77, 0.78, 0.09), (0, 0.5, 0.13), (0.76, 0.51, 0), (0.63, 0.04, 0)
-  */
-
 #define BRICK_COUNT_X 14
 #define BRICK_COUNT_Y 8
 #define FIRST_BRICK_HEIGHT 90.0f
@@ -147,12 +135,7 @@ void game_update(F32 dt, Input *input, Image *image)
     };
     ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
     ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
-    ball_speed = 200.0f;
-
-    // TEMP
-    ball_direction.x = -0.3f;
-    ball_direction.y = -sqrtf(1.0f - ball_direction.x*ball_direction.x);
-    paddle_speed = 30.0f;
+    ball_speed = 50.0f;
 
     // NOTE(leo): Bricks
     {
@@ -176,25 +159,25 @@ void game_update(F32 dt, Input *input, Image *image)
 
 
   // NOTE(leo): Physics
-  local_persist bool was_down;
-  if(input->button_left.is_down && !was_down)
   {
-    /*
-      Physics iteration:
-        - find potential collisions: ball sweep vs paddle sweep, bricks, walls(not bottom)
-        - find contact time for each potential collision
-        - advance to first contact time (or to end of iteration)
-        - compute impatc position, bounce ball, record bounce at position
-    */
-
     // NOTE(leo): Compute new paddle speed
-    // TEMP
-    if(false)
     {
+      F32 stop_speed = 2.0f;
+      F32 friction = 12.0f;
+      F32 acceleration = 7.0f;
+      F32 paddle_max_speed = 125.0f;
+
+      F32 wish_dir = 0.0f;
+      if(input->button_left.is_down)
+        wish_dir -= 1.0f;
+      if(input->button_right.is_down)
+        wish_dir += 1.0f;
+
       // Friction
       do {
-        F32 stop_speed = 2.0f;
-        F32 friction = 0.1f;
+        // NOTE(leo): No friction while user is pressing buttons.
+        if(wish_dir != 0.0f)
+          break;
 
         F32 speed = fabsf(paddle_speed);
         if(speed < 0.5f) {
@@ -213,14 +196,6 @@ void game_update(F32 dt, Input *input, Image *image)
 
       // Paddle Acceleration
       do {
-        F32 acceleration = 0.2f;
-        F32 wish_dir = 0.0f;
-        F32 paddle_max_speed = 10.0f;
-        if(input->button_left.is_down)
-          wish_dir -= 1.0f;
-        if(input->button_right.is_down)
-          wish_dir += 1.0f;
-
         F32 current_speed = paddle_speed * wish_dir;
         F32 add_speed = paddle_max_speed - current_speed;
         if(add_speed <= 0.0f)
@@ -238,11 +213,18 @@ void game_update(F32 dt, Input *input, Image *image)
       F32 step = dt-elapsed;
 
       V2 ball_delta = v2_smul(step*ball_speed, ball_direction);
+
+      // TODO(leo): toi walls, bricks
+
       // NOTE(leo): Compute toi_paddle
       F32 toi_paddle = 1.0f;
       int paddle_edge = -1;
       {
         V2 paddle_delta = { step*paddle_speed, 0.0f };
+        if(paddle.pos.x + paddle_delta.x < 0.0f)
+          paddle_delta.x = 0.0f - paddle.pos.x;
+        else if(paddle.pos.x + paddle_delta.x > ARENA_WIDTH - paddle.dim.x)
+          paddle_delta.x = ARENA_WIDTH - paddle.dim.x - paddle.pos.x;
 
         V2 point = v2_add(ball.pos, v2_smul(0.5f, ball.dim));
         V2 point_delta = v2_sub(ball_delta, paddle_delta);
@@ -275,24 +257,44 @@ void game_update(F32 dt, Input *input, Image *image)
           paddle_edge = -1;
         }
       }
+
+      // TODO(leo): choose smallest toi
       step *= toi_paddle;
 
       // NOTE(leo): integrate by step
       ball.pos = v2_add(ball.pos, v2_smul(step*ball_speed, ball_direction));
-      paddle.pos = v2_add(paddle.pos, (V2){ step*paddle_speed, 0.0f });
 
-      if(paddle_edge == 0 || paddle_edge == 2)
+      V2 paddle_delta = { step*paddle_speed, 0.0f };
+      if(paddle.pos.x + paddle_delta.x < 0.0f)
+        paddle_delta.x = 0.0f - paddle.pos.x;
+      else if(paddle.pos.x + paddle_delta.x > ARENA_WIDTH - paddle.dim.x)
+        paddle_delta.x = ARENA_WIDTH - paddle.dim.x - paddle.pos.x;
+      paddle.pos = v2_add(paddle.pos, paddle_delta);
+
+      // NOTE(leo): Change ball direction and move away from edge. (Movement is
+      // for corners: if ball moves down and left and hits right bottom corner,
+      // ball now would move up and collide at step = 0 in next iteration. This
+      // would be ignored and step = 1, the ball moves into the paddle)
+      if(paddle_edge == 0) {
         ball_direction.x = -ball_direction.x;
-      else if(paddle_edge == 1 || paddle_edge == 3)
+        ball.pos.x += -0.001f;
+      }
+      else if(paddle_edge == 1) {
         ball_direction.y = -ball_direction.y;
+        ball.pos.y += -0.001f;
+      }
+      else if(paddle_edge == 2) {
+        ball_direction.x = -ball_direction.x;
+        ball.pos.x += 0.001f;
+      }
+      else if(paddle_edge == 3) {
+        ball_direction.y = -ball_direction.y;
+        ball.pos.y += 0.001f;
+      }
 
       elapsed += step;
-      // TEMP
-      break;
     }
   }
-  // TEMP
-  was_down = input->button_left.is_down;
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
