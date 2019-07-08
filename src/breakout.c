@@ -115,6 +115,7 @@ void game_update(F32 dt, Input *input, Image *image)
   local_persist F32 paddle_speed;
 
   local_persist Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
+  local_persist int bricks_remaining;
 
   // NOTE(leo): initialization
   local_persist bool initialized = false;
@@ -135,7 +136,7 @@ void game_update(F32 dt, Input *input, Image *image)
     };
     ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
     ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
-    ball_speed = 50.0f;
+    ball_speed = 100.0f;
 
     // NOTE(leo): Bricks
     {
@@ -154,6 +155,7 @@ void game_update(F32 dt, Input *input, Image *image)
         }
         ypos += BRICK_HEIGHT + BRICK_DELTA_Y;
       }
+      bricks_remaining = sizeof(bricks)/sizeof(bricks[0]);
     }
   }
 
@@ -163,9 +165,9 @@ void game_update(F32 dt, Input *input, Image *image)
     // NOTE(leo): Compute new paddle speed
     {
       F32 stop_speed = 2.0f;
-      F32 friction = 12.0f;
-      F32 acceleration = 7.0f;
-      F32 paddle_max_speed = 125.0f;
+      F32 friction = 18.0f;
+      F32 acceleration = 6.0f;
+      F32 paddle_max_speed = 200.0f;
 
       F32 wish_dir = 0.0f;
       if(input->button_left.is_down)
@@ -214,7 +216,72 @@ void game_update(F32 dt, Input *input, Image *image)
 
       V2 ball_delta = v2_smul(step*ball_speed, ball_direction);
 
-      // TODO(leo): toi walls, bricks
+      enum {
+        EDGE_LEFT = 0,
+        EDGE_BOTTOM,
+        EDGE_RIGHT,
+        EDGE_TOP,
+      };
+
+      // NOTE(leo): First toi brick
+      F32 toi_brick = 1.0f;
+      int hit_brick_index = -1;
+      int brick_edge = -1;
+      {
+        for(int brick_index = 0; brick_index < bricks_remaining; brick_index++) {
+          Brick *brick = &bricks[brick_index];
+
+          V2 point = v2_add(ball.pos, v2_smul(0.5f, ball.dim));
+          V2 point_delta = ball_delta;
+
+          Rect rect = (Rect){
+            .pos = v2_sub(brick->rect.pos, v2_smul(0.5f, ball.dim)),
+            .dim = v2_add(brick->rect.dim, ball.dim),
+          };
+
+          // 0-3: left, bottom, right, top
+          F32 ts[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+          if(point_delta.x != 0.0f) {
+            ts[EDGE_LEFT] = (rect.pos.x-point.x)/point_delta.x;
+            ts[EDGE_RIGHT] = (rect.pos.x+rect.dim.x - point.x)/point_delta.x;
+          }
+          if(point_delta.y != 0.0f) {
+            ts[EDGE_BOTTOM] = (rect.pos.y-point.y)/point_delta.y;
+            ts[EDGE_TOP] = (rect.pos.y+rect.dim.y - point.y)/point_delta.y;
+          }
+          for(int i = 0; i < 4; i++) {
+            F32 t = ts[i];
+            if(t > 0.0f && t < toi_brick) {
+              V2 hit = v2_add(point, v2_smul(t, point_delta));
+              if(point_inside_rect(hit, rect)) {
+                toi_brick = t;
+                hit_brick_index = brick_index;
+                brick_edge = i;
+              }
+            }
+          }
+        }
+      }
+
+      // NOTE(leo): Compute toi for walls
+      F32 toi_left_wall = 1.0f;
+      F32 toi_top_wall = 1.0f;
+      F32 toi_right_wall = 1.0f;
+      {
+        if(ball_delta.x != 0.0f) {
+          toi_left_wall = (0.0f - ball.pos.x)/ball_delta.x;
+          if(toi_left_wall <= 0.0f || toi_left_wall > 1.0f)
+            toi_left_wall = 1.0f;
+          toi_right_wall = (ARENA_WIDTH-ball.dim.x - ball.pos.x)/ball_delta.x;
+          if(toi_right_wall <= 0.0f || toi_right_wall > 1.0f)
+            toi_right_wall = 1.0f;
+        }
+        if(ball_delta.y != 0.0f) {
+          toi_top_wall = (ARENA_HEIGHT-ball.dim.y - ball.pos.y)/ball_delta.y;
+          if(toi_top_wall <= 0.0f || toi_top_wall > 1.0f)
+            toi_top_wall = 1.0f;
+        }
+      }
 
       // NOTE(leo): Compute toi_paddle
       F32 toi_paddle = 1.0f;
@@ -237,12 +304,12 @@ void game_update(F32 dt, Input *input, Image *image)
         // 0-3: left, bottom, right, top
         F32 ts[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
         if(point_delta.x != 0.0f) {
-          ts[0] = (rect.pos.x-point.x)/point_delta.x;
-          ts[2] = (rect.pos.x+rect.dim.x - point.x)/point_delta.x;
+          ts[EDGE_LEFT] = (rect.pos.x-point.x)/point_delta.x;
+          ts[EDGE_RIGHT] = (rect.pos.x+rect.dim.x - point.x)/point_delta.x;
         }
         if(point_delta.y != 0.0f) {
-          ts[1] = (rect.pos.y-point.y)/point_delta.y;
-          ts[3] = (rect.pos.y+rect.dim.y - point.y)/point_delta.y;
+          ts[EDGE_BOTTOM] = (rect.pos.y-point.y)/point_delta.y;
+          ts[EDGE_TOP] = (rect.pos.y+rect.dim.y - point.y)/point_delta.y;
         }
         for(int i = 0; i < 4; i++) {
           F32 t = ts[i];
@@ -259,7 +326,33 @@ void game_update(F32 dt, Input *input, Image *image)
       }
 
       // TODO(leo): choose smallest toi
-      step *= toi_paddle;
+      int collision_edge = -1;
+      F32 toi_min = 1.0f;
+      bool hit_brick = false;
+      if(toi_left_wall < toi_min) {
+        toi_min = toi_left_wall;
+        collision_edge = EDGE_RIGHT; // NOTE(leo): Left wall is like a right edge
+      }
+      if(toi_top_wall < toi_min) {
+        toi_min = toi_top_wall;
+        collision_edge = EDGE_BOTTOM;
+      }
+      if(toi_right_wall < toi_min) {
+        toi_min = toi_right_wall;
+        collision_edge = EDGE_LEFT;
+      }
+      if(toi_paddle < toi_min) {
+        toi_min = toi_paddle;
+        collision_edge = paddle_edge;
+      }
+
+      if(toi_brick < toi_min) {
+        toi_min = toi_brick;
+        collision_edge = brick_edge;
+        hit_brick = true;
+      }
+
+      step *= toi_min;
 
       // NOTE(leo): integrate by step
       ball.pos = v2_add(ball.pos, v2_smul(step*ball_speed, ball_direction));
@@ -275,21 +368,33 @@ void game_update(F32 dt, Input *input, Image *image)
       // for corners: if ball moves down and left and hits right bottom corner,
       // ball now would move up and collide at step = 0 in next iteration. This
       // would be ignored and step = 1, the ball moves into the paddle)
-      if(paddle_edge == 0) {
+      if(collision_edge == EDGE_LEFT) {
         ball_direction.x = -ball_direction.x;
         ball.pos.x += -0.001f;
       }
-      else if(paddle_edge == 1) {
+      else if(collision_edge == EDGE_BOTTOM) {
         ball_direction.y = -ball_direction.y;
         ball.pos.y += -0.001f;
       }
-      else if(paddle_edge == 2) {
+      else if(collision_edge == EDGE_RIGHT) {
         ball_direction.x = -ball_direction.x;
         ball.pos.x += 0.001f;
       }
-      else if(paddle_edge == 3) {
+      else if(collision_edge == EDGE_TOP) {
         ball_direction.y = -ball_direction.y;
         ball.pos.y += 0.001f;
+      }
+
+      // NOTE(leo): Destroy hit brick
+      if(hit_brick)
+        bricks[hit_brick_index] = bricks[--bricks_remaining];
+
+      // NOTE(leo): Check if ball is past bottom edge
+      if(ball.pos.y < 0.0f - ball.dim.y) {
+        // TEMP
+        ball.pos = (V2){ ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f };
+        ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
+        ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
       }
 
       elapsed += step;
@@ -298,12 +403,10 @@ void game_update(F32 dt, Input *input, Image *image)
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
-  for(int y = 0; y < BRICK_COUNT_Y; y++) {
-    for(int x = 0; x < BRICK_COUNT_X; x++) {
-      Brick *brick = &bricks[y*BRICK_COUNT_X + x];
-      Color *color = &brick_colors[brick->type];
-      draw_rectangle(v2_smul(5.0f, brick->rect.pos), v2_smul(5.0f, v2_add(brick->rect.pos, brick->rect.dim)), color->r, color->g, color->b, image);
-    }
+  for(int brick_index = 0; brick_index < bricks_remaining; brick_index++) {
+    Brick *brick = &bricks[brick_index];
+    Color *color = &brick_colors[brick->type];
+    draw_rectangle(v2_smul(5.0f, brick->rect.pos), v2_smul(5.0f, v2_add(brick->rect.pos, brick->rect.dim)), color->r, color->g, color->b, image);
   }
 
   // NOTE(leo): Draw paddle
