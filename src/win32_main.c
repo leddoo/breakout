@@ -3,33 +3,33 @@
 
 #include <windows.h>
 
-typedef struct Win32ImageBuffer {
+typedef struct Win32Image {
   BITMAPINFO info;
   U32 *memory;
   int width, height;
   int pitch;
-} Win32ImageBuffer;
+} Win32Image;
 
 global_variable bool global_running;
-global_variable Win32ImageBuffer global_image_buffer;
+global_variable Win32Image global_image;
 
-internal void win32_image_buffer_init(U32 width, U32 height)
+internal void win32_image_init(U32 width, U32 height)
 {
   assert(width && height);
 
-  global_image_buffer.info.bmiHeader = (BITMAPINFOHEADER){
-    .biSize = sizeof(global_image_buffer.info.bmiHeader),
+  global_image.info.bmiHeader = (BITMAPINFOHEADER){
+    .biSize = sizeof(global_image.info.bmiHeader),
     .biWidth = width,
     .biHeight = height,
     .biPlanes = 1,
     .biBitCount = 32,
     .biCompression = BI_RGB,
   };
-  global_image_buffer.memory = VirtualAlloc(NULL, width*height*sizeof(global_image_buffer.memory[0]), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-  global_image_buffer.width = width;
-  global_image_buffer.height = height;
-  global_image_buffer.pitch = width;
-  assert(global_image_buffer.memory);
+  global_image.memory = VirtualAlloc(NULL, width*height*sizeof(global_image.memory[0]), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  global_image.width = width;
+  global_image.height = height;
+  global_image.pitch = width;
+  assert(global_image.memory);
 }
 
 Input global_input;
@@ -40,7 +40,6 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
   switch(message)
   {
     case WM_SIZE: {
-      int a;
     } break;
     case WM_CLOSE: {
       global_running = false;
@@ -62,16 +61,15 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
         global_input.button_right.is_down = is_down;
       }
     } break;
-
     case WM_PAINT: {
       PAINTSTRUCT paint;
       HDC dc = BeginPaint(window, &paint);
       int ret = StretchDIBits(
         dc,
-        0, 0, global_image_buffer.width, global_image_buffer.height,
-        0, 0, global_image_buffer.width, global_image_buffer.height,
-        global_image_buffer.memory,
-        &global_image_buffer.info,
+        0, 0, global_image.width, global_image.height,
+        0, 0, global_image.width, global_image.height,
+        global_image.memory,
+        &global_image.info,
         DIB_RGB_COLORS,
         SRCCOPY
       );
@@ -121,7 +119,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     );
   }
 
-  win32_image_buffer_init(1280, 720);
+  win32_image_init(1280, 720);
 
   LARGE_INTEGER last_time = { 0 };
   LARGE_INTEGER timer_frequency = { 0 };
@@ -155,17 +153,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     }
 
     // NOTE(leo): Clear image
-    for(int y = 0; y < global_image_buffer.height; y++) {
-      for(int x = 0; x < global_image_buffer.width; x++)
-        global_image_buffer.memory[y*global_image_buffer.pitch + x] = 0;
+    for(int y = 0; y < global_image.height; y++) {
+      for(int x = 0; x < global_image.width; x++)
+        global_image.memory[y*global_image.pitch + x] = 0;
     }
 
     // NOTE(leo): Update game
     Image game_image = {
-      .memory = global_image_buffer.memory,
-      .width = global_image_buffer.width,
-      .height = global_image_buffer.height,
-      .pitch = global_image_buffer.pitch,
+      .memory = global_image.memory,
+      .width = global_image.width,
+      .height = global_image.height,
+      .pitch = global_image.pitch,
     };
     game_update(dt, &global_input, &game_image);
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
