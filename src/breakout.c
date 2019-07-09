@@ -102,6 +102,8 @@ void game_update(F32 dt, Input *input, Image *image)
 #define ARENA_WIDTH 111.0f
 #define ARENA_HEIGHT 140.0f
 
+  F32 ball_speeds[4] = { 50.0f, 75.0f, 100.0f, 125.0f };
+
   typedef struct Brick {
     Rect rect;
     U32 type;
@@ -116,6 +118,9 @@ void game_update(F32 dt, Input *input, Image *image)
 
   local_persist Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
   local_persist int bricks_remaining;
+
+  local_persist int score;
+  local_persist int hit_count;
 
   // NOTE(leo): initialization
   local_persist bool initialized = false;
@@ -136,7 +141,7 @@ void game_update(F32 dt, Input *input, Image *image)
     };
     ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
     ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
-    ball_speed = 100.0f;
+    ball_speed = ball_speeds[0];
 
     // NOTE(leo): Bricks
     {
@@ -157,6 +162,9 @@ void game_update(F32 dt, Input *input, Image *image)
       }
       bricks_remaining = sizeof(bricks)/sizeof(bricks[0]);
     }
+
+    score = 0;
+    hit_count = 0;
   }
 
 
@@ -329,6 +337,7 @@ void game_update(F32 dt, Input *input, Image *image)
       int collision_edge = -1;
       F32 toi_min = 1.0f;
       bool hit_brick = false;
+      bool hit_paddle = false;
       if(toi_left_wall < toi_min) {
         toi_min = toi_left_wall;
         collision_edge = EDGE_RIGHT; // NOTE(leo): Left wall is like a right edge
@@ -344,12 +353,14 @@ void game_update(F32 dt, Input *input, Image *image)
       if(toi_paddle < toi_min) {
         toi_min = toi_paddle;
         collision_edge = paddle_edge;
+        hit_paddle = true;
       }
 
       if(toi_brick < toi_min) {
         toi_min = toi_brick;
         collision_edge = brick_edge;
         hit_brick = true;
+        hit_paddle = false;
       }
 
       step *= toi_min;
@@ -385,10 +396,6 @@ void game_update(F32 dt, Input *input, Image *image)
         ball.pos.y += 0.001f;
       }
 
-      // NOTE(leo): Destroy hit brick
-      if(hit_brick)
-        bricks[hit_brick_index] = bricks[--bricks_remaining];
-
       // NOTE(leo): Check if ball is past bottom edge
       if(ball.pos.y < 0.0f - ball.dim.y) {
         // TEMP
@@ -397,21 +404,236 @@ void game_update(F32 dt, Input *input, Image *image)
         ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
       }
 
+      // NOTE(leo): Hit counting and ball speed
+      if(collision_edge >= 0) {
+        hit_count++;
+        if(hit_count == 4 && ball_speed < ball_speeds[1])
+          ball_speed = ball_speeds[1];
+        else if(hit_count == 12 && ball_speed < ball_speeds[2])
+          ball_speed = ball_speeds[2];
+      }
+
+      // NOTE(leo): Paddle shrinking
+      if(collision_edge == EDGE_BOTTOM && !hit_brick && !hit_paddle) {
+        if(paddle.dim.x == PADDLE_WIDTH) {
+          F32 new_width = PADDLE_WIDTH/2.0f;
+          paddle.pos.x += PADDLE_WIDTH/2.0f - new_width/2.0f;
+          paddle.dim.x = new_width;
+        }
+      }
+
+      // NOTE(leo): Attribute score for hitting brick; Max ball speed if orange or red brick
+      if(hit_brick) {
+        Brick *brick = &bricks[hit_brick_index];
+        if(brick->type == 0) {
+          score += 1;
+        }
+        else if(brick->type == 1) {
+          score += 3;
+        }
+        else if(brick->type == 2) {
+          score += 5;
+          ball_speed = ball_speeds[3];
+        }
+        else if(brick->type == 3) {
+          score += 7;
+          ball_speed = ball_speeds[3];
+        }
+      }
+
+      // NOTE(leo): Destroy hit brick
+      if(hit_brick)
+        bricks[hit_brick_index] = bricks[--bricks_remaining];
+
       elapsed += step;
     }
   }
+
+  F32 scale = 4.0f;
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
   for(int brick_index = 0; brick_index < bricks_remaining; brick_index++) {
     Brick *brick = &bricks[brick_index];
     Color *color = &brick_colors[brick->type];
-    draw_rectangle(v2_smul(5.0f, brick->rect.pos), v2_smul(5.0f, v2_add(brick->rect.pos, brick->rect.dim)), color->r, color->g, color->b, image);
+    draw_rectangle(v2_smul(scale, brick->rect.pos), v2_smul(scale, v2_add(brick->rect.pos, brick->rect.dim)), color->r, color->g, color->b, image);
   }
 
   // NOTE(leo): Draw paddle
-  draw_rectangle(v2_smul(5.0f, paddle.pos), v2_smul(5.0f, v2_add(paddle.pos, paddle.dim)), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, image);
+  draw_rectangle(v2_smul(scale, paddle.pos), v2_smul(scale, v2_add(paddle.pos, paddle.dim)), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, image);
 
   // NOTE(leo): Draw ball
-  draw_rectangle(v2_smul(5.0f, ball.pos), v2_smul(5.0f, v2_add(ball.pos, ball.dim)), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, image);
+  draw_rectangle(v2_smul(scale, ball.pos), v2_smul(scale, v2_add(ball.pos, ball.dim)), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, image);
+
+  // NOTE(leo): Draw score
+  {
+    int ones = score % 10;
+    int tens = (score / 10) % 10;
+    int hundreds = (score / 100) % 10;
+    int numbers[3] = { hundreds, tens, ones };
+    for(int i = 0; i < 3; i++) {
+      // TODO(leo): Proper positioning
+      // TODO(leo): Move out constants
+      V2 pos = { ARENA_WIDTH/2.0f + i*6.0f, ARENA_HEIGHT+4.0f };
+      switch(numbers[i]) {
+        case 0: {
+          /*
+              #####
+              #---#
+              #---#
+              #---#
+              #---#
+              #---#
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 1: {
+          /*
+              ---#-
+              --##-
+              ---#-
+              ---#-
+              ---#-
+              ---#-
+              --###
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){2.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){2.0f, 5.0f})), v2_smul(scale, v2_add(pos, (V2){ 3.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){3.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 4.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 2: {
+          /*
+              #####
+              ----#
+              ----#
+              #####
+              #----
+              #----
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 3: {
+          /*
+              #####
+              ----#
+              ----#
+              -####
+              ----#
+              ----#
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){1.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 4: {
+          /*
+              #---#
+              #---#
+              #---#
+              #####
+              ----#
+              ----#
+              ----#
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 5: {
+          /*
+              #####
+              #----
+              #----
+              #####
+              ----#
+              ----#
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 6: {
+          /*
+              #####
+              #----
+              #----
+              #####
+              #---#
+              #---#
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 7: {
+          /*
+              #####
+              ----#
+              ----#
+              ----#
+              ----#
+              ----#
+              ----#
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 8: {
+          /*
+              #####
+              #---#
+              #---#
+              #####
+              #---#
+              #---#
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+        case 9: {
+          /*
+              #####
+              #---#
+              #---#
+              #####
+              ----#
+              ----#
+              #####
+          */
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 0.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 1.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 3.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 4.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 6.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 7.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 1.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 3.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){4.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 5.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+          draw_rectangle(v2_smul(scale, v2_add(pos, (V2){0.0f, 4.0f})), v2_smul(scale, v2_add(pos, (V2){ 1.0f, 6.0f })), 1.0f, 1.0f, 1.0f, image);
+        } break;
+      }
+    }
+  }
 }
