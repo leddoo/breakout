@@ -392,7 +392,24 @@ void game_update(F32 dt, Input *input, Image *image)
         ball.pos.x += 0.001f;
       }
       else if(collision_edge == EDGE_TOP) {
-        ball_direction.y = -ball_direction.y;
+        if(hit_paddle) {
+          V2 left = ball.pos;
+          V2 right = v2_add(ball.pos, (V2) { ball.dim.x, 0.0f });
+          if(left.x < paddle.pos.x)
+            left.x = paddle.pos.x;
+          if(right.x > paddle.pos.x + paddle.dim.x)
+            right.x = paddle.pos.x + paddle.dim.x;
+          V2 mid = v2_add(v2_smul(0.5f, left), v2_smul(0.5f, right));
+          F32 hit_normalized = (mid.x - paddle.pos.x)/paddle.dim.x;
+          // NOTE(leo): 0: -45 degs, 1: 45 degs, in between: lerp. Relative to paddle normal
+          F32 PI = 3.14159f;
+          F32 angle = hit_normalized*(PI/2.0f - PI/4.0f) + (1.0f - hit_normalized)*(PI/2.0f + PI/4.0f);
+          ball_direction.x = cosf(angle);
+          ball_direction.y = sinf(angle);
+        }
+        else {
+          ball_direction.y = -ball_direction.y;
+        }
         ball.pos.y += 0.001f;
       }
 
