@@ -60,6 +60,9 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
       else if(vk == 'D' || vk == VK_RIGHT) {
         global_input.button_right.is_down = is_down;
       }
+      else if(vk = VK_SPACE) {
+        global_input.button_serve.is_down = is_down;
+      }
     } break;
     case WM_PAINT: {
       PAINTSTRUCT paint;

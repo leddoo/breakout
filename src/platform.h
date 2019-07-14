@@ -14,4 +14,5 @@ typedef struct ButtonState {
 typedef struct Input {
   ButtonState button_left;
   ButtonState button_right;
+  ButtonState button_serve;
 } Input;
