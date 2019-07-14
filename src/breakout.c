@@ -189,6 +189,7 @@ void game_update(F32 dt, Input *input, Image *image)
   local_persist Rect ball;
   local_persist V2 ball_direction;
   local_persist F32 ball_speed;
+  local_persist F32 target_ball_speed;
 
   local_persist Rect paddle;
   local_persist F32 paddle_speed;
@@ -198,6 +199,8 @@ void game_update(F32 dt, Input *input, Image *image)
 
   local_persist int score;
   local_persist int hit_count;
+  local_persist int balls_remaining;
+  local_persist bool waiting_for_serve;
 
   // NOTE(leo): initialization
   local_persist bool initialized = false;
@@ -218,7 +221,7 @@ void game_update(F32 dt, Input *input, Image *image)
     };
     ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
     ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
-    ball_speed = ball_speeds[0];
+    target_ball_speed = ball_speeds[0];
 
     // NOTE(leo): Bricks
     {
@@ -242,10 +245,67 @@ void game_update(F32 dt, Input *input, Image *image)
 
     score = 0;
     hit_count = 0;
+    balls_remaining = 3;
+    waiting_for_serve = true;
+  }
+
+  if(waiting_for_serve && input->button_serve.is_down) {
+    if(balls_remaining) {
+      waiting_for_serve = false;
+      ball.pos = (V2){ ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f };
+      ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
+      ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
+      ball_speed = 0;
+      target_ball_speed = ball_speeds[0];
+      paddle.pos = (V2){ ARENA_WIDTH/2.0f - PADDLE_WIDTH/2.0f, PADDLE_Y };
+      hit_count = 0;
+    }
+    else {
+      // NOTE(leo): Paddle
+      paddle = (Rect){
+        .pos = { ARENA_WIDTH/2.0f - PADDLE_WIDTH/2.0f, PADDLE_Y },
+        .dim = { PADDLE_WIDTH, PADDLE_HEIGTH }
+      };
+
+      // NOTE(leo): Ball
+      ball = (Rect){
+        .pos = { ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f },
+        .dim = { BALL_WIDTH, BALL_HEIGHT }
+      };
+      ball_direction.x = 1.5f* ((F32)rand()/RAND_MAX) - 1.5f/2.0f;
+      ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
+      target_ball_speed = ball_speeds[0];
+
+      // NOTE(leo): Bricks
+      {
+        F32 ypos = FIRST_BRICK_HEIGHT;
+        for(int y = 0; y < BRICK_COUNT_Y; y++) {
+          F32 xpos = 0.0f;
+          for(int x = 0; x < BRICK_COUNT_X; x++) {
+            bricks[y*BRICK_COUNT_X + x] = (Brick){
+              .rect = {
+                .pos = (V2){xpos, ypos},
+                .dim = (V2){BRICK_WIDTH, BRICK_HEIGHT} },
+              .type = y/2
+            };
+
+            xpos += BRICK_WIDTH + BRICK_DELTA_X;
+          }
+          ypos += BRICK_HEIGHT + BRICK_DELTA_Y;
+        }
+        bricks_remaining = sizeof(bricks)/sizeof(bricks[0]);
+      }
+
+      score = 0;
+      hit_count = 0;
+      balls_remaining = 3;
+      waiting_for_serve = true;
+    }
   }
 
 
   // NOTE(leo): Physics
+  if(!waiting_for_serve)
   {
     // NOTE(leo): Compute new paddle speed
     if(true)
@@ -296,8 +356,20 @@ void game_update(F32 dt, Input *input, Image *image)
       } while(false);
     }
 
-    if(!input->button_serve.is_down)
-      dt = 0.001f;
+    // NOTE(leo): Compute new ball speed
+    {
+      bool too_fast = target_ball_speed < ball_speed;
+      F32 ball_add_speed = fabsf(target_ball_speed - ball_speed);
+      F32 ball_acceleration = 100.0f;
+      F32 ball_accelerate_speed = ball_acceleration*dt;
+      if(ball_accelerate_speed > ball_add_speed)
+        ball_accelerate_speed = ball_add_speed;
+      if(too_fast)
+        ball_speed -= ball_accelerate_speed;
+      else
+        ball_speed += ball_accelerate_speed;
+    }
+
     F32 elapsed = 0.0f;
     int iterations = 0;
     while(elapsed < dt) {
@@ -421,11 +493,11 @@ void game_update(F32 dt, Input *input, Image *image)
           }
           else if(brick->type == 2) {
             score += 5;
-            ball_speed = ball_speeds[3];
+            target_ball_speed = ball_speeds[3];
           }
           else if(brick->type == 3) {
             score += 7;
-            ball_speed = ball_speeds[3];
+            target_ball_speed = ball_speeds[3];
           }
         }
 
@@ -448,8 +520,9 @@ void game_update(F32 dt, Input *input, Image *image)
           paddle.dim.x = new_width;
         }
 
-        if(false && hit_wall_edges & EDGE_TOP) {
-          // TODO(leo): 3 Rounds and ball serve
+        if(hit_wall_edges & EDGE_TOP) {
+          balls_remaining--;
+          waiting_for_serve = true;
         }
       }
 
@@ -470,25 +543,40 @@ void game_update(F32 dt, Input *input, Image *image)
           ball_direction.x = cosf(angle);
           ball_direction.y = sinf(angle);
         }
+        else if(hit_paddle_edges & EDGE_LEFT || hit_paddle_edges & EDGE_RIGHT) {
+          /*
+            Elastic collision:
+              m1 = 1, m2 = inf
+              s1 = ball_speed_x, s2 = paddle_speed
+              u1 = ball_speed_x - paddle_speed, u2 = 0
+              v1 = (m1-m2)/(m1+m2)*u1 + (2*m2)/(m1+m2)*u2 = -1*(ball_speed_x - paddle_speed)
+              v2 = (2*m1)/(m1+m2)*u1 + (m2-m1)/(m1+m2)*u2 = 0
+              v1 = -ball_speed_x + paddle_speed
+              v2 = 0
+              w1 = -ball_speed_x + 2*paddle_speed
+              w2 = paddle_speed
+          */
+          V2 w1 = { -ball_speed*ball_direction.x + 2*paddle_speed, ball_speed*ball_direction.y };
+          ball_speed = sqrtf(w1.x*w1.x + w1.y*w1.y);
+          ball_direction = v2_smul(1.0f/ball_speed, w1);
+          if(hit_paddle_edges & EDGE_LEFT)
+            ball.pos.x += -0.001f;
+          else
+            ball.pos.x += 0.001f;
+          paddle_speed = 0.0f;
+        }
         else {
           reflect_ball(hit_paddle_edges, &ball, &ball_direction);
         }
       }
 
-      // NOTE(leo): Prevent paddle from pushing ball into wall
-      if(hit_paddle && hit_walls) {
-        paddle_speed = 0.0f;
-        if(hit_wall_edges & EDGE_LEFT)
-          paddle.pos.x += 0.001f;
-        else
-          paddle.pos.x += -0.001f;
-      }
+      // TODO(leo): Prevent paddle from pushing ball into wall
 
       // NOTE(leo): Ball speed
-      if(hit_count == 4 && ball_speed < ball_speeds[1])
-        ball_speed = ball_speeds[1];
-      else if(hit_count == 12 && ball_speed < ball_speeds[2])
-        ball_speed = ball_speeds[2];
+      if(hit_count == 4 && target_ball_speed < ball_speeds[1])
+        target_ball_speed = ball_speeds[1];
+      else if(hit_count == 12 && target_ball_speed < ball_speeds[2])
+        target_ball_speed = ball_speeds[2];
 
       elapsed += step;
     }
@@ -509,7 +597,8 @@ void game_update(F32 dt, Input *input, Image *image)
   draw_rectangle(v2_smul(scale, paddle.pos), v2_smul(scale, v2_add(paddle.pos, paddle.dim)), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, image);
 
   // NOTE(leo): Draw ball
-  draw_rectangle(v2_smul(scale, ball.pos), v2_smul(scale, v2_add(ball.pos, ball.dim)), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, image);
+  if(!waiting_for_serve)
+    draw_rectangle(v2_smul(scale, ball.pos), v2_smul(scale, v2_add(ball.pos, ball.dim)), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, image);
 
   // NOTE(leo): Draw score
   {
