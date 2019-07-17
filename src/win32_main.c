@@ -64,6 +64,15 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
         global_input.button_serve.is_down = is_down;
       }
     } break;
+    case WM_MOUSEMOVE: {
+      RECT rect = { 0 };
+      GetClientRect(window, &rect);
+      DWORD mask = (((DWORD)1)<<16) - 1;
+      int x = (int)(l_param & mask);
+      int y = (int)((l_param & ~mask) >> 16);
+      global_input.pointer.x = x;
+      global_input.pointer.y = (rect.bottom-rect.top) - y;
+    } break;
     case WM_PAINT: {
       PAINTSTRUCT paint;
       HDC dc = BeginPaint(window, &paint);

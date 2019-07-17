@@ -179,6 +179,8 @@ void game_update(F32 dt, Input *input, Image *image)
 #define ARENA_WIDTH 111.0f
 #define ARENA_HEIGHT 140.0f
 
+  F32 scale = 4.0f;
+
   F32 ball_speeds[4] = { 50.0f, 75.0f, 100.0f, 125.0f };
 
   typedef struct Brick {
@@ -193,6 +195,7 @@ void game_update(F32 dt, Input *input, Image *image)
 
   local_persist Rect paddle;
   local_persist F32 paddle_speed;
+  local_persist F32 target_paddle_pos;
 
   local_persist Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
   local_persist int bricks_remaining;
@@ -308,52 +311,18 @@ void game_update(F32 dt, Input *input, Image *image)
   if(!waiting_for_serve)
   {
     // NOTE(leo): Compute new paddle speed
-    if(true)
     {
-      F32 stop_speed = 2.0f;
-      F32 friction = 18.0f;
-      F32 acceleration = 6.0f;
-      F32 paddle_max_speed = 200.0f;
-
-      F32 wish_dir = 0.0f;
-      if(input->button_left.is_down)
-        wish_dir -= 1.0f;
-      if(input->button_right.is_down)
-        wish_dir += 1.0f;
-
-      // Friction
-      do {
-        // NOTE(leo): No friction while user is pressing buttons.
-        if(wish_dir != 0.0f)
-          break;
-
-        F32 speed = fabsf(paddle_speed);
-        if(speed < 0.5f) {
-          paddle_speed = 0.0f;
-          break;
-        }
-
-        if(speed < stop_speed)
-          speed = stop_speed;
-        F32 drop = speed*friction*dt;
-        F32 new_speed = speed - drop;
-        if(new_speed < 0.0f)
-          new_speed = 0.0f;
-        paddle_speed *= new_speed/speed;
-      } while(false);
-
-      // Paddle Acceleration
-      do {
-        F32 current_speed = paddle_speed * wish_dir;
-        F32 add_speed = paddle_max_speed - current_speed;
-        if(add_speed <= 0.0f)
-          break;
-        F32 accelerate_speed = acceleration*paddle_max_speed*dt;
-        if(accelerate_speed > add_speed)
-          accelerate_speed = add_speed;
-
-        paddle_speed += accelerate_speed*wish_dir;
-      } while(false);
+      F32 paddle_speed_factor = 20.0f;
+      target_paddle_pos = (F32)input->pointer.x/scale - paddle.dim.x/2.0f;
+      if(target_paddle_pos < 0.0f)
+        target_paddle_pos = 0.0f;
+      if(target_paddle_pos > ARENA_WIDTH)
+        target_paddle_pos = ARENA_WIDTH;
+      F32 add_pos = target_paddle_pos - paddle.pos.x;
+      F32 dx = paddle_speed_factor*add_pos*dt;
+      if(fabsf(dx) > fabsf(add_pos))
+        dx = add_pos;
+      paddle_speed = dx/dt;
     }
 
     // NOTE(leo): Compute new ball speed
@@ -582,8 +551,6 @@ void game_update(F32 dt, Input *input, Image *image)
     }
     assert(iterations < 25);
   }
-
-  F32 scale = 4.0f;
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
