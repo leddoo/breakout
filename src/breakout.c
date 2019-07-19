@@ -1,12 +1,8 @@
 #include "util.h"
-#include "platform.h"
+#include "breakout.h"
 
 #include <math.h>
 #include <stdlib.h>
-
-typedef struct V2 {
-  F32 x, y;
-} V2;
 
 inline
 V2 v2_add(V2 a, V2 b)
@@ -25,14 +21,6 @@ V2 v2_smul(F32 s, V2 v)
 {
   return (V2) { s *v.x, s *v.y };
 }
-
-typedef struct Rect {
-  V2 pos, dim;
-} Rect;
-
-typedef struct Segment {
-  V2 p1, p2;
-} Segment;
 
 typedef struct Color {
   F32 r, g, b, a;
@@ -151,36 +139,8 @@ void reflect_ball(U8 edges, Rect *ball, V2 *ball_direction)
   }
 }
 
-void game_update(F32 dt, Input *input, Image *image)
+void game_update(F32 dt, Input *input, Image *image, Rect playing_area)
 {
-#define BRICK_COUNT_X 14
-#define BRICK_COUNT_Y 8
-#define FIRST_BRICK_HEIGHT 90.0f
-#define BRICK_WIDTH 7.0f
-#define BRICK_HEIGHT 2.0f
-#define BRICK_DELTA_X 1.0f
-#define BRICK_DELTA_Y 0.8f
-
-#define PADDLE_WIDTH 7.0f
-#define PADDLE_HEIGTH 3.0f
-#define PADDLE_Y 6.0f
-
-#define PADDLE_COLOR_R 0.0f
-#define PADDLE_COLOR_G 0.5f
-#define PADDLE_COLOR_B 0.78f
-
-#define BALL_WIDTH 2.0f
-#define BALL_HEIGHT 1.5f
-
-#define BALL_COLOR_R 0.82f
-#define BALL_COLOR_G 0.82f
-#define BALL_COLOR_B 0.82f
-
-#define ARENA_WIDTH 111.0f
-#define ARENA_HEIGHT 140.0f
-
-  F32 scale = 4.0f;
-
   F32 ball_speeds[4] = { 50.0f, 75.0f, 100.0f, 125.0f };
 
   typedef struct Brick {
@@ -230,7 +190,7 @@ void game_update(F32 dt, Input *input, Image *image)
     {
       F32 ypos = FIRST_BRICK_HEIGHT;
       for(int y = 0; y < BRICK_COUNT_Y; y++) {
-        F32 xpos = 0.0f;
+        F32 xpos = BRICK_DELTA_X;
         for(int x = 0; x < BRICK_COUNT_X; x++) {
           bricks[y*BRICK_COUNT_X + x] = (Brick){
             .rect = {
@@ -252,7 +212,7 @@ void game_update(F32 dt, Input *input, Image *image)
     waiting_for_serve = true;
   }
 
-  if(waiting_for_serve && input->button_serve.is_down) {
+  if(waiting_for_serve && input->serve) {
     if(balls_remaining) {
       waiting_for_serve = false;
       ball.pos = (V2){ ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f };
@@ -260,16 +220,9 @@ void game_update(F32 dt, Input *input, Image *image)
       ball_direction.y = sqrtf(1.0f - ball_direction.x*ball_direction.x);
       ball_speed = 0;
       target_ball_speed = ball_speeds[0];
-      paddle.pos = (V2){ ARENA_WIDTH/2.0f - PADDLE_WIDTH/2.0f, PADDLE_Y };
       hit_count = 0;
     }
     else {
-      // NOTE(leo): Paddle
-      paddle = (Rect){
-        .pos = { ARENA_WIDTH/2.0f - PADDLE_WIDTH/2.0f, PADDLE_Y },
-        .dim = { PADDLE_WIDTH, PADDLE_HEIGTH }
-      };
-
       // NOTE(leo): Ball
       ball = (Rect){
         .pos = { ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f },
@@ -283,7 +236,7 @@ void game_update(F32 dt, Input *input, Image *image)
       {
         F32 ypos = FIRST_BRICK_HEIGHT;
         for(int y = 0; y < BRICK_COUNT_Y; y++) {
-          F32 xpos = 0.0f;
+          F32 xpos = BRICK_DELTA_X;
           for(int x = 0; x < BRICK_COUNT_X; x++) {
             bricks[y*BRICK_COUNT_X + x] = (Brick){
               .rect = {
@@ -313,7 +266,7 @@ void game_update(F32 dt, Input *input, Image *image)
     // NOTE(leo): Compute new paddle speed
     {
       F32 paddle_speed_factor = 20.0f;
-      target_paddle_pos = (F32)input->pointer.x/scale - paddle.dim.x/2.0f;
+      target_paddle_pos = (F32)input->paddle_control*ARENA_WIDTH - paddle.dim.x/2.0f;
       if(target_paddle_pos < 0.0f)
         target_paddle_pos = 0.0f;
       if(target_paddle_pos > ARENA_WIDTH)
@@ -552,20 +505,29 @@ void game_update(F32 dt, Input *input, Image *image)
     assert(iterations < 25);
   }
 
+  Image playing_area_image = *image;
+  playing_area_image.memory = &image->memory[(int)playing_area.pos.y*image->pitch + (int)playing_area.pos.x];
+  F32 scale = playing_area.dim.x/PLAYING_AREA_WIDTH;
+  V2 arena_offset = v2_smul(scale, (V2) { 2.0f, 0.0f });
+
+  // NOTE(leo): Draw arena
+  draw_rectangle(v2_smul(scale, (V2){0.0f, 0.0f}), v2_smul(scale, (V2){2.0f, PLAYING_AREA_HEIGHT}), 1.0f, 1.0f, 1.0f, &playing_area_image);
+  draw_rectangle(v2_smul(scale, (V2){2.0f+ARENA_WIDTH, 0.0f}), v2_smul(scale, (V2){2.0f+ARENA_WIDTH+2.0f, PLAYING_AREA_HEIGHT}), 1.0f, 1.0f, 1.0f, &playing_area_image);
+
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
   for(int brick_index = 0; brick_index < bricks_remaining; brick_index++) {
     Brick *brick = &bricks[brick_index];
     Color *color = &brick_colors[brick->type];
-    draw_rectangle(v2_smul(scale, brick->rect.pos), v2_smul(scale, v2_add(brick->rect.pos, brick->rect.dim)), color->r, color->g, color->b, image);
+    draw_rectangle(v2_add(arena_offset, v2_smul(scale, brick->rect.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(brick->rect.pos, brick->rect.dim))), color->r, color->g, color->b, &playing_area_image);
   }
 
   // NOTE(leo): Draw paddle
-  draw_rectangle(v2_smul(scale, paddle.pos), v2_smul(scale, v2_add(paddle.pos, paddle.dim)), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, image);
+  draw_rectangle(v2_add(arena_offset, v2_smul(scale, paddle.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(paddle.pos, paddle.dim))), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, &playing_area_image);
 
   // NOTE(leo): Draw ball
   if(!waiting_for_serve)
-    draw_rectangle(v2_smul(scale, ball.pos), v2_smul(scale, v2_add(ball.pos, ball.dim)), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, image);
+    draw_rectangle(v2_add(arena_offset, v2_smul(scale, ball.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(ball.pos, ball.dim))), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, &playing_area_image);
 
   // NOTE(leo): Draw score
   {
@@ -576,7 +538,7 @@ void game_update(F32 dt, Input *input, Image *image)
     for(int i = 0; i < 3; i++) {
       // TODO(leo): Proper positioning
       // TODO(leo): Move out constants
-      V2 pos = { ARENA_WIDTH/2.0f + i*6.0f, ARENA_HEIGHT+4.0f };
+      V2 pos = (V2) { ARENA_WIDTH/2.0f + i*6.0f, ARENA_HEIGHT+4.0f };
       switch(numbers[i]) {
         case 0: {
           /*

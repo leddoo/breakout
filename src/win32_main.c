@@ -1,5 +1,5 @@
 #include "util.h"
-#include "platform.h"
+#include "breakout.h"
 
 #include <windows.h>
 
@@ -13,7 +13,7 @@ typedef struct Win32Image {
 global_variable bool global_running;
 global_variable Win32Image global_image;
 
-internal void win32_image_init(U32 width, U32 height)
+internal void win32_image_resize(U32 width, U32 height)
 {
   assert(width && height);
 
@@ -25,6 +25,8 @@ internal void win32_image_init(U32 width, U32 height)
     .biBitCount = 32,
     .biCompression = BI_RGB,
   };
+  if(global_image.memory)
+    VirtualFree(global_image.memory, 0, MEM_RELEASE);
   global_image.memory = VirtualAlloc(NULL, width*height*sizeof(global_image.memory[0]), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
   global_image.width = width;
   global_image.height = height;
@@ -32,7 +34,8 @@ internal void win32_image_init(U32 width, U32 height)
   assert(global_image.memory);
 }
 
-Input global_input;
+U32 mouse_x;
+bool space_down;
 
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -40,6 +43,10 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
   switch(message)
   {
     case WM_SIZE: {
+      RECT client_rect;
+      BOOL ret = GetClientRect(window, &client_rect);
+      assert(ret);
+      win32_image_resize(client_rect.right-client_rect.left, client_rect.bottom-client_rect.top);
     } break;
     case WM_CLOSE: {
       global_running = false;
@@ -47,21 +54,13 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
     case WM_DESTROY: {
       global_running = false;
     } break;
-    case WM_KEYDOWN:
-    case WM_KEYUP: {
-      U32 vk = w_param;
+    case WM_KEYUP:
+    case WM_KEYDOWN: {
+      DWORD vk = w_param;
       bool was_down = !!(l_param & (1<<30));
       bool is_down = !(l_param & (1<<31));
-      if(was_down == is_down)
-        break;
-      if(vk == 'A' || vk == VK_LEFT) {
-        global_input.button_left.is_down = is_down;
-      }
-      else if(vk == 'D' || vk == VK_RIGHT) {
-        global_input.button_right.is_down = is_down;
-      }
-      else if(vk = VK_SPACE) {
-        global_input.button_serve.is_down = is_down;
+      if(vk = VK_SPACE) {
+        space_down = is_down;
       }
     } break;
     case WM_MOUSEMOVE: {
@@ -69,9 +68,7 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
       GetClientRect(window, &rect);
       DWORD mask = (((DWORD)1)<<16) - 1;
       int x = (int)(l_param & mask);
-      int y = (int)((l_param & ~mask) >> 16);
-      global_input.pointer.x = x;
-      global_input.pointer.y = (rect.bottom-rect.top) - y;
+      mouse_x = x;
     } break;
     case WM_PAINT: {
       PAINTSTRUCT paint;
@@ -95,8 +92,6 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
   return result;
 }
 
-void game_update(F32 dt, Input *input, Image *image);
-
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, int cmd_show)
 {
   HWND main_window;
@@ -111,27 +106,19 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     ATOM main_window_atom = RegisterClassA(&main_window_class);
     assert(main_window_atom);
 
-    RECT client_rect = { 0 };
-    client_rect.right = 1280;
-    client_rect.bottom = 720;
-    BOOL ret = AdjustWindowRectEx(&client_rect, WS_OVERLAPPEDWINDOW|WS_VISIBLE, FALSE, 0);
-    assert(ret);
-
     main_window = CreateWindowExA(
       0,
       main_window_atom,
       "breakout",
       WS_OVERLAPPEDWINDOW|WS_VISIBLE,
       CW_USEDEFAULT, CW_USEDEFAULT,
-      client_rect.right-client_rect.left, client_rect.bottom-client_rect.top,
+      CW_USEDEFAULT, CW_USEDEFAULT,
       0,
       0,
       instance,
       NULL
     );
   }
-
-  win32_image_init(1280, 720);
 
   LARGE_INTEGER last_time = { 0 };
   LARGE_INTEGER timer_frequency = { 0 };
@@ -177,7 +164,24 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       .height = global_image.height,
       .pitch = global_image.pitch,
     };
-    game_update(dt, &global_input, &game_image);
+    F32 arena_aspect_radio = PLAYING_AREA_WIDTH/PLAYING_AREA_HEIGHT;
+    F32 image_aspect_ratio = (F32)game_image.width/game_image.height;
+    Rect playing_area;
+    if(image_aspect_ratio > arena_aspect_radio) {
+      // NOTE(leo): Image is wider
+      F32 actual_width = game_image.height*arena_aspect_radio;
+      playing_area.pos = (V2){ game_image.width/2.0f - actual_width/2.0f, 0.0f };
+      playing_area.dim = (V2){ actual_width, game_image.height };
+    }
+    else {
+      F32 actual_height = game_image.width/arena_aspect_radio;
+      playing_area.pos = (V2){ 0.0f, game_image.height/2.0f - actual_height/2.0f };
+      playing_area.dim = (V2){ game_image.width, actual_height };
+    }
+    Input game_input = {0};
+    game_input.serve = space_down;
+    game_input.paddle_control = (mouse_x - playing_area.pos.x) / playing_area.dim.x;
+    game_update(dt, &game_input, &game_image, playing_area);
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
 
     // NOTE(leo): Lock frame rate and calculate dt
@@ -186,31 +190,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       QueryPerformanceCounter(&now);
       dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
       int sleep_time = (int)((target_dt - dt)*1000.0f)-1;
+      if(false) // temp
       if(sleep_time > 0)
         Sleep(sleep_time);
+      if(false) // temp
       do {
         QueryPerformanceCounter(&now);
         dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
       } while(dt < target_dt);
       last_time = now;
     }
-
-#if 0
-    local_persist int frame_count;
-    local_persist LARGE_INTEGER last_sec = { 0 };
-    frame_count++;
-    LARGE_INTEGER now;
-    QueryPerformanceCounter(&now);
-    F32 accu = (F32)(((F64)now.QuadPart-(F64)last_sec.QuadPart)/(F64)timer_frequency.QuadPart);
-    if(accu >= 1.0f) {
-      F32 fps = frame_count/accu;
-      frame_count = 0;
-      last_sec = now;
-      char buffer[128];
-      wsprintfA(buffer, "%d.%d\n", (int)fps, (int)((fps-(int)fps)*1000));
-      OutputDebugStringA(buffer);
-    }
-#endif
   }
 
   // NOTE(leo): Reset scheduler
