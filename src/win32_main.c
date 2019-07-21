@@ -57,9 +57,8 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
     case WM_KEYUP:
     case WM_KEYDOWN: {
       DWORD vk = w_param;
-      bool was_down = !!(l_param & (1<<30));
       bool is_down = !(l_param & (1<<31));
-      if(vk = VK_SPACE) {
+      if(vk == VK_SPACE) {
         space_down = is_down;
       }
     } break;
@@ -141,6 +140,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     assert(ret==TIMERR_NOERROR);
   }
 
+  GameState game_state = { 0 };
   global_running = true;
   while(global_running) {
     // NOTE(leo): Handle messages
@@ -200,7 +200,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     Input game_input = {0};
     game_input.serve = space_down;
     game_input.paddle_control = (mouse_x - playing_area.pos.x) / playing_area.dim.x;
-    game_update(dt, &game_input, &game_image, playing_area);
+    game_update(&game_state, dt, &game_input, &game_image, playing_area);
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
 
     // NOTE(leo): Lock frame rate and calculate dt

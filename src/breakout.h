@@ -28,6 +28,50 @@
 #define PLAYING_AREA_WIDTH (ARENA_WIDTH + 4.0f)
 #define PLAYING_AREA_HEIGHT (ARENA_HEIGHT + 2.0f + 20.0f)
 
+#define INITIAL_BALL_POS ((V2){ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f})
+#define INITIAL_PADDLE_POS ((V2){ARENA_WIDTH/2.0f - PADDLE_WIDTH/2.0f, PADDLE_Y})
+
+#define BALL_SPEED_1 50.0f
+#define BALL_SPEED_2 75.0f
+#define BALL_SPEED_3 100.0f
+#define BALL_SPEED_4 125.0f
+
+#define BALL_SPEED_2 50.0f
+#define BALL_SPEED_3 50.0f
+#define BALL_SPEED_4 50.0f
+
+typedef struct V2 {
+  F32 x, y;
+} V2;
+
+typedef struct Rect {
+  V2 pos, dim;
+} Rect;
+
+
+typedef struct Brick {
+  Rect rect;
+  U32 type;
+} Brick;
+
+typedef struct GameState {
+  bool initialized;
+  Rect ball;
+  V2 ball_direction;
+  F32 ball_speed;
+  F32 target_ball_speed;
+
+  Rect paddle;
+
+  Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
+  int bricks_remaining;
+
+  int score;
+  int hit_count;
+  int balls_remaining;
+  bool waiting_for_serve;
+} GameState;
+
 typedef struct Input {
   F32 paddle_control; // NOTE(leo): Ranges 0-1; negative value indicates "no user input"
   bool serve;
@@ -39,12 +83,4 @@ typedef struct Image {
   int pitch;
 } Image;
 
-typedef struct V2 {
-  F32 x, y;
-} V2;
-
-typedef struct Rect {
-  V2 pos, dim;
-} Rect;
-
-void game_update(F32 dt, Input *input, Image *image, Rect playing_area);
+void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect playing_area);
