@@ -70,6 +70,9 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
       int x = (int)(l_param & mask);
       mouse_x = x;
     } break;
+    case WM_SETCURSOR: {
+      SetCursor(NULL);
+    } break;
     case WM_PAINT: {
       PAINTSTRUCT paint;
       HDC dc = BeginPaint(window, &paint);
@@ -178,6 +181,22 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       playing_area.pos = (V2){ 0.0f, game_image.height/2.0f - actual_height/2.0f };
       playing_area.dim = (V2){ game_image.width, actual_height };
     }
+
+    // NOTE(leo): Constrain mouse
+    if(GetActiveWindow() == main_window) {
+      POINT top_left = { (int)playing_area.pos.x, (int)playing_area.pos.y };
+      ClientToScreen(main_window, &top_left);
+      RECT cursor_rect;
+      cursor_rect.left = top_left.x;
+      cursor_rect.top = top_left.y;
+      cursor_rect.right = top_left.x + playing_area.dim.x;
+      cursor_rect.bottom = top_left.y + playing_area.dim.y;
+      ClipCursor(&cursor_rect);
+    }
+    else {
+      ClipCursor(NULL);
+    }
+
     Input game_input = {0};
     game_input.serve = space_down;
     game_input.paddle_control = (mouse_x - playing_area.pos.x) / playing_area.dim.x;
