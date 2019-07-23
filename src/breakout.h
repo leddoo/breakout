@@ -36,10 +36,6 @@
 #define BALL_SPEED_3 100.0f
 #define BALL_SPEED_4 125.0f
 
-#define BALL_SPEED_2 50.0f
-#define BALL_SPEED_3 50.0f
-#define BALL_SPEED_4 50.0f
-
 typedef struct V2 {
   F32 x, y;
 } V2;

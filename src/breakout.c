@@ -166,26 +166,12 @@ void spawn_bricks(GameState *state)
   state->bricks_remaining = BRICK_COUNT_X*BRICK_COUNT_Y;
 }
 
-void begin_round(GameState *state)
+void reset_ball(GameState *state)
 {
   state->ball.pos = INITIAL_BALL_POS;
   choose_random_ball_direction(&state->ball_direction);
   state->ball_speed = 0.0f;
   state->target_ball_speed = BALL_SPEED_1;
-
-  state->paddle.dim.x = PADDLE_WIDTH;
-
-  state->hit_count = 0;
-}
-
-void begin_match(GameState *state)
-{
-  spawn_bricks(state);
-
-  state->score = 0;
-  state->balls_remaining = 3;
-
-  begin_round(state);
 }
 
 void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect playing_area)
@@ -218,10 +204,22 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
   if(state->waiting_for_serve && input->serve) {
     if(state->balls_remaining) {
       state->waiting_for_serve = false;
-      begin_round(state);
+
+      reset_ball(state);
+      state->paddle.dim.x = PADDLE_WIDTH;
+
+      state->hit_count = 0;
     }
     else {
-      begin_match(state);
+      state->waiting_for_serve = false;
+
+      reset_ball(state);
+      state->paddle.dim.x = PADDLE_WIDTH;
+      spawn_bricks(state);
+
+      state->hit_count = 0;
+      state->score = 0;
+      state->balls_remaining = 3;
     }
   }
 
