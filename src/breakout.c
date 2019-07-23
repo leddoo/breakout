@@ -450,7 +450,6 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
             state->ball.pos.x += -0.001f;
           else
             state->ball.pos.x += 0.001f;
-          paddle_speed = 0.0f;
         }
         else {
           reflect_ball(hit_paddle_edges, &state->ball, &state->ball_direction);
