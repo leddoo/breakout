@@ -249,7 +249,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     F32 paddle_speed;
     {
       F32 paddle_speed_factor = 20.0f;
-      F32 target_paddle_pos = (F32)input->paddle_control*(ARENA_WIDTH-PADDLE_WIDTH);
+      F32 target_paddle_pos = (F32)input->paddle_control*(ARENA_WIDTH-game_state->paddle.dim.x);
       if(target_paddle_pos < 0.0f)
         target_paddle_pos = 0.0f;
       if(target_paddle_pos > ARENA_WIDTH)
@@ -734,8 +734,8 @@ Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_are
   F32 scale = playing_area.dim.x/PLAYING_AREA_WIDTH;
   V2 arena_offset = v2_add(playing_area.pos, v2_smul(scale, (V2) { 2.0f, 0.0f }));
   Rect result = {
-    .pos = v2_add(arena_offset, v2_smul(scale, (V2) { PADDLE_WIDTH/2.0f, game_state->paddle.pos.y + PADDLE_HEIGTH/2.0f })),
-    .dim = v2_smul(scale, (V2) { ARENA_WIDTH-PADDLE_WIDTH, 0.0f })
+    .pos = v2_add(arena_offset, v2_smul(scale, (V2) { game_state->paddle.dim.x/2.0f, game_state->paddle.pos.y + PADDLE_HEIGTH/2.0f })),
+    .dim = v2_smul(scale, (V2) { ARENA_WIDTH-game_state->paddle.dim.x, 0.0f })
   };
   return result;
 }

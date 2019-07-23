@@ -55,7 +55,7 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     ClientToScreen(win32_window, &top_left);
     RECT cursor_rect = {
       .left = top_left.x, .top = top_left.y,
-      .right = top_left.x + roundf(paddle_motion_rect.dim.x) + 1, .bottom = top_left.y + 1,
+      .right = top_left.x + ceilf(paddle_motion_rect.dim.x) + 1, .bottom = top_left.y + 1,
     };
     ClipCursor(&cursor_rect);
   }
