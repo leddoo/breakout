@@ -227,14 +227,29 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
   // NOTE(leo): Ball lost, animate paddle back
   if(game_state->state == GAME_STATE_BALL_LOST) {
-    F32 paddle_speed_factor = 20.0f;
     F32 target_paddle_pos = INITIAL_PADDLE_POS.x;
-    F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
-    F32 dx = paddle_speed_factor*add_pos*dt;
-    if(fabsf(dx) > fabsf(add_pos))
-      dx = add_pos;
-    game_state->paddle.pos.x += dx;
-    if(fabsf(target_paddle_pos - game_state->paddle.pos.x) < 0.001f) {
+    F32 target_paddle_width = PADDLE_WIDTH;
+    // NOTE(leo): Width
+    {
+      V2 center = v2_add(game_state->paddle.pos, v2_smul(0.5f, game_state->paddle.dim));
+      F32 add_width = target_paddle_width - game_state->paddle.dim.x;
+      F32 dw = 20.0f*add_width*dt;
+      if(fabsf(dw) > fabsf(add_width))
+        dw = add_width;
+      game_state->paddle.dim.x += dw;
+      game_state->paddle.pos = v2_sub(center, v2_smul(0.5f, game_state->paddle.dim));
+    }
+    // NOTE(leo): Position
+    {
+      F32 paddle_speed_factor = 20.0f;
+      F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
+      F32 dx = paddle_speed_factor*add_pos*dt;
+      if(fabsf(dx) > fabsf(add_pos))
+        dx = add_pos;
+      game_state->paddle.pos.x += dx;
+    }
+    if(fabsf(target_paddle_pos - game_state->paddle.pos.x) < 0.001f
+      && fabsf(target_paddle_width - game_state->paddle.dim.x) < 0.001f) {
       game_state->state = GAME_STATE_WAIT_SERVE;
       reset_ball(game_state);
       game_state->paddle.pos.x = target_paddle_pos;
