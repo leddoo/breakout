@@ -22,3 +22,21 @@ typedef double F64;
 #define local_persist static
 
 #define array_count(array) (sizeof(array)/sizeof((array)[0]))
+
+typedef struct V2 {
+  F32 x, y;
+} V2;
+
+typedef struct Rect {
+  V2 pos, dim;
+} Rect;
+
+typedef struct Image {
+  U32 *memory;
+  int width, height;
+  int pitch;
+} Image;
+
+typedef struct GameMemory {
+  U8 memory[4096];
+} GameMemory;

@@ -1,5 +1,5 @@
 #include "util.h"
-#include "breakout.h"
+#include "win32_breakout.h"
 
 #include <windows.h>
 
@@ -12,6 +12,8 @@ typedef struct Win32Image {
 
 global_variable bool global_running;
 global_variable Win32Image global_image;
+global_variable Win32Input global_input;
+global_variable GameMemory global_game_memory;
 
 internal void win32_image_resize(U32 width, U32 height)
 {
@@ -34,8 +36,6 @@ internal void win32_image_resize(U32 width, U32 height)
   assert(global_image.memory);
 }
 
-U32 mouse_x;
-bool space_down;
 
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -58,19 +58,35 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
     case WM_KEYDOWN: {
       DWORD vk = w_param;
       bool is_down = !(l_param & (1<<31));
-      if(vk == VK_SPACE) {
-        space_down = is_down;
+      if(vk == VK_ESCAPE) {
+        global_input.key_escape.is_down = is_down;
+      }
+      else if(vk == VK_RETURN) {
+        global_input.key_return.is_down = is_down;
+      }
+      else if(vk == VK_SPACE) {
+        global_input.key_space.is_down = is_down;
+      }
+      else if(vk == VK_UP) {
+        global_input.key_up.is_down = is_down;
+      }
+      else if(vk == VK_DOWN) {
+        global_input.key_down.is_down = is_down;
       }
     } break;
-    case WM_MOUSEMOVE: {
-      RECT rect = { 0 };
-      GetClientRect(window, &rect);
-      DWORD mask = (((DWORD)1)<<16) - 1;
-      int x = (int)(l_param & mask);
-      mouse_x = x;
+    case WM_SETCURSOR : {
+      if(win32_cursor_hidden(&global_game_memory)) {
+        SetCursor(NULL);
+        result = TRUE;
+      }
+      else {
+        result = DefWindowProcA(window, message, w_param, l_param);
+      }
     } break;
-    case WM_SETCURSOR: {
-      SetCursor(NULL);
+    case WM_ACTIVATEAPP: {
+      if(w_param == FALSE)
+        win32_on_lose_focus(&global_game_memory);
+      result = DefWindowProcA(window, message, w_param, l_param);
     } break;
     case WM_PAINT: {
       PAINTSTRUCT paint;
@@ -103,6 +119,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       .lpfnWndProc = main_window_proc,
       .hInstance = instance,
       .lpszClassName = "main_window_class",
+      .hCursor = LoadCursorA(NULL, IDC_ARROW),
     };
 
     ATOM main_window_atom = RegisterClassA(&main_window_class);
@@ -140,9 +157,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     assert(ret==TIMERR_NOERROR);
   }
 
-  GameState game_state = { 0 };
   global_running = true;
   while(global_running) {
+    global_input.key_escape.was_down = global_input.key_escape.is_down;
+    global_input.key_return.was_down = global_input.key_return.is_down;
+    global_input.key_space.was_down = global_input.key_space.is_down;
+    global_input.key_up.was_down = global_input.key_up.is_down;
+    global_input.key_down.was_down = global_input.key_down.is_down;
+
     // NOTE(leo): Handle messages
     MSG message;
     while(PeekMessageA(&message, NULL, 0, 0, PM_REMOVE)) {
@@ -160,6 +182,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
         global_image.memory[y*global_image.pitch + x] = 0;
     }
 
+
+    // NOTE(leo): Query mouse pos (required, as WM_MOUSEMOVE seems to be late when using SetCursorPos sometimes)
+    POINT mouse;
+    GetCursorPos(&mouse);
+    ScreenToClient(main_window, &mouse);
+    global_input.mouse = (V2){ mouse.x, mouse.y };
+
     // NOTE(leo): Update game
     Image game_image = {
       .memory = global_image.memory,
@@ -167,40 +196,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       .height = global_image.height,
       .pitch = global_image.pitch,
     };
-    F32 arena_aspect_radio = PLAYING_AREA_WIDTH/PLAYING_AREA_HEIGHT;
-    F32 image_aspect_ratio = (F32)game_image.width/game_image.height;
-    Rect playing_area;
-    if(image_aspect_ratio > arena_aspect_radio) {
-      // NOTE(leo): Image is wider
-      F32 actual_width = game_image.height*arena_aspect_radio;
-      playing_area.pos = (V2){ game_image.width/2.0f - actual_width/2.0f, 0.0f };
-      playing_area.dim = (V2){ actual_width, game_image.height };
-    }
-    else {
-      F32 actual_height = game_image.width/arena_aspect_radio;
-      playing_area.pos = (V2){ 0.0f, game_image.height/2.0f - actual_height/2.0f };
-      playing_area.dim = (V2){ game_image.width, actual_height };
-    }
-
-    // NOTE(leo): Constrain mouse
-    if(GetActiveWindow() == main_window) {
-      POINT top_left = { (int)playing_area.pos.x, (int)playing_area.pos.y };
-      ClientToScreen(main_window, &top_left);
-      RECT cursor_rect;
-      cursor_rect.left = top_left.x;
-      cursor_rect.top = top_left.y;
-      cursor_rect.right = top_left.x + playing_area.dim.x;
-      cursor_rect.bottom = top_left.y + playing_area.dim.y;
-      ClipCursor(&cursor_rect);
-    }
-    else {
-      ClipCursor(NULL);
-    }
-
-    Input game_input = {0};
-    game_input.serve = space_down;
-    game_input.paddle_control = (mouse_x - playing_area.pos.x) / playing_area.dim.x;
-    game_update(&game_state, dt, &game_input, &game_image, playing_area);
+    bool keep_running = win32_game_update(&global_game_memory, dt, &global_input, &game_image, main_window);
+    if(!keep_running)
+      global_running = false;
     RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
 
     // NOTE(leo): Lock frame rate and calculate dt
@@ -209,10 +207,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
       QueryPerformanceCounter(&now);
       dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
       int sleep_time = (int)((target_dt - dt)*1000.0f)-1;
-      if(false) // temp
       if(sleep_time > 0)
         Sleep(sleep_time);
-      if(false) // temp
       do {
         QueryPerformanceCounter(&now);
         dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);

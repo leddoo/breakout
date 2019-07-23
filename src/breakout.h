@@ -38,14 +38,6 @@
 #define BALL_SPEED_3 100.0f
 #define BALL_SPEED_4 125.0f
 
-typedef struct V2 {
-  F32 x, y;
-} V2;
-
-typedef struct Rect {
-  V2 pos, dim;
-} Rect;
-
 
 typedef struct Brick {
   Rect rect;
@@ -77,6 +69,8 @@ enum {
 */
 
 typedef struct GameState {
+  int state;
+
   Rect ball;
   V2 ball_direction;
   F32 ball_speed;
@@ -90,19 +84,18 @@ typedef struct GameState {
   int score;
   int hit_count;
   int balls_remaining;
-
-  int state;
 } GameState;
 
 typedef struct Input {
   F32 paddle_control; // NOTE(leo): Ranges 0-1; negative value indicates "no user input"
-  bool serve;
 } Input;
 
-typedef struct Image {
-  U32 *memory;
-  int width, height;
-  int pitch;
-} Image;
+void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area);
 
-void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect playing_area);
+void game_start(GameState *game_state);
+void game_serve(GameState *game_state);
+
+Rect compute_playing_area(V2 image_size);
+
+Rect compute_paddle_rect_in_image(GameState *game_state, Rect playing_area);
+Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_area);

@@ -174,12 +174,36 @@ void reset_ball(GameState *game_state)
   game_state->target_ball_speed = BALL_SPEED_1;
 }
 
+void game_start(GameState *game_state)
+{
+  game_state->state = GAME_STATE_WAIT_SERVE;
+
+  reset_ball(game_state);
+
+  game_state->paddle.pos = INITIAL_PADDLE_POS;
+
+  spawn_bricks(game_state);
+
+  game_state->hit_count = 0;
+  game_state->score = 0;
+  game_state->balls_remaining = 3;
+}
+
+void game_serve(GameState *game_state)
+{
+  game_state->state = GAME_STATE_PLAYING;
+
+  reset_ball(game_state);
+
+  game_state->hit_count = 0;
+}
+
 void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
 {
   // NOTE(leo): initialization
   if(game_state->state == GAME_STATE_UNINITIALIZED)
   {
-    game_state->state = GAME_STATE_WAIT_SERVE;
+    game_state->state = GAME_STATE_MAIN_MENU;
 
     srand(time(0));
 
@@ -200,27 +224,6 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
     game_state->balls_remaining = 3;
   }
-
-  if(game_state->state == GAME_STATE_WAIT_SERVE && input->serve) {
-    game_state->state = GAME_STATE_PLAYING;
-
-    reset_ball(game_state);
-    game_state->paddle.dim.x = PADDLE_WIDTH;
-
-    game_state->hit_count = 0;
-    /*
-      game_state->state = GAME_STATE_PLAYING;
-
-      reset_ball(game_state);
-      game_state->paddle.dim.x = PADDLE_WIDTH;
-      spawn_bricks(game_state);
-
-      game_state->hit_count = 0;
-      game_state->score = 0;
-      game_state->balls_remaining = 3;
-      */
-  }
-
 
   // NOTE(leo): Ball lost, animate paddle back
   if(game_state->state == GAME_STATE_BALL_LOST) {
@@ -246,7 +249,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     F32 paddle_speed;
     {
       F32 paddle_speed_factor = 20.0f;
-      F32 target_paddle_pos = (F32)input->paddle_control*ARENA_WIDTH - game_state->paddle.dim.x/2.0f;
+      F32 target_paddle_pos = (F32)input->paddle_control*(ARENA_WIDTH-PADDLE_WIDTH);
       if(target_paddle_pos < 0.0f)
         target_paddle_pos = 0.0f;
       if(target_paddle_pos > ARENA_WIDTH)
@@ -432,6 +435,9 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
             game_state->state = GAME_STATE_BALL_LOST;
           else
             game_state->state = GAME_STATE_GAME_OVER;
+
+          game_state->paddle.dim.x = PADDLE_WIDTH;
+
           elapsed = dt;
           break;
         }
@@ -477,7 +483,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
             game_state->ball.pos.x += 0.001f;
         }
         else {
-          assert(false && "Ball hit bottom paddle edge");
+          reflect_ball(hit_paddle_edges, &game_state->ball, &game_state->ball_direction);
         }
       }
 
@@ -689,4 +695,47 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       }
     }
   }
+}
+
+Rect compute_playing_area(V2 image_size)
+{
+  Rect result;
+
+  F32 area_aspect_radio = PLAYING_AREA_WIDTH/PLAYING_AREA_HEIGHT;
+  F32 image_aspect_ratio = image_size.x/image_size.y;
+  if(image_aspect_ratio > area_aspect_radio) {
+    // NOTE(leo): Image is wider
+    F32 actual_width = image_size.y*area_aspect_radio;
+    result.pos = (V2){ image_size.x/2.0f - actual_width/2.0f, 0.0f };
+    result.dim = (V2){ actual_width, image_size.y };
+  }
+  else {
+    F32 actual_height = image_size.x/area_aspect_radio;
+    result.pos = (V2){ 0.0f, image_size.y/2.0f - actual_height/2.0f };
+    result.dim = (V2){ image_size.x, actual_height };
+  }
+
+  return result;
+}
+
+Rect compute_paddle_rect_in_image(GameState *game_state, Rect playing_area)
+{
+  F32 scale = playing_area.dim.x/PLAYING_AREA_WIDTH;
+  V2 arena_offset = v2_add(playing_area.pos, v2_smul(scale, (V2) { 2.0f, 0.0f }));
+  Rect result = {
+    .pos = v2_add(arena_offset, v2_smul(scale, game_state->paddle.pos)),
+    .dim = v2_smul(scale, game_state->paddle.dim)
+  };
+  return result;
+}
+
+Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_area)
+{
+  F32 scale = playing_area.dim.x/PLAYING_AREA_WIDTH;
+  V2 arena_offset = v2_add(playing_area.pos, v2_smul(scale, (V2) { 2.0f, 0.0f }));
+  Rect result = {
+    .pos = v2_add(arena_offset, v2_smul(scale, (V2) { PADDLE_WIDTH/2.0f, game_state->paddle.pos.y + PADDLE_HEIGTH/2.0f })),
+    .dim = v2_smul(scale, (V2) { ARENA_WIDTH-PADDLE_WIDTH, 0.0f })
+  };
+  return result;
 }

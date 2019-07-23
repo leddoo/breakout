@@ -1,7 +1,9 @@
-add_executable(breakout "breakout.c")
-
 if(WIN32)
-  target_sources(breakout PRIVATE win32_main.c)
+  add_executable(breakout
+    breakout.c
+    win32_main.c
+    win32_breakout.c
+  )
   target_link_libraries(breakout PRIVATE Winmm)
   target_link_options(breakout PRIVATE /SUBSYSTEM:WINDOWS)
 else()
