@@ -1,3 +1,5 @@
+#pragma once
+
 #include "util.h"
 
 #define BRICK_COUNT_X 14
@@ -50,8 +52,31 @@ typedef struct Brick {
   U32 type;
 } Brick;
 
+enum {
+  GAME_STATE_UNINITIALIZED = 0,
+
+  GAME_STATE_MAIN_MENU,
+
+  GAME_STATE_WAIT_SERVE,
+
+  GAME_STATE_PLAYING,
+
+  GAME_STATE_BALL_LOST,
+  GAME_STATE_GAME_OVER,
+  GAME_STATE_PAUSE,
+};
+
+/*
+                                       .-----------------------.-------------------------.
+                                       v                       |                         |
+    uninitialized -> main_menu -> wait_serve -> playing .-> ball_lost (move paddle back) |
+                                                   ^    |-> game_over -------------------'
+                                                   |    '-> pause
+                                                   |          |
+                                                   '----------'
+*/
+
 typedef struct GameState {
-  bool initialized;
   Rect ball;
   V2 ball_direction;
   F32 ball_speed;
@@ -65,7 +90,8 @@ typedef struct GameState {
   int score;
   int hit_count;
   int balls_remaining;
-  bool waiting_for_serve;
+
+  int state;
 } GameState;
 
 typedef struct Input {

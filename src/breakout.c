@@ -146,13 +146,13 @@ void choose_random_ball_direction(V2 *ball_direction)
   ball_direction->y = sqrtf(1.0f - ball_direction->x*ball_direction->x);
 }
 
-void spawn_bricks(GameState *state)
+void spawn_bricks(GameState *game_state)
 {
   F32 ypos = FIRST_BRICK_HEIGHT;
   for(int y = 0; y < BRICK_COUNT_Y; y++) {
     F32 xpos = BRICK_DELTA_X;
     for(int x = 0; x < BRICK_COUNT_X; x++) {
-      state->bricks[y*BRICK_COUNT_X + x] = (Brick){
+      game_state->bricks[y*BRICK_COUNT_X + x] = (Brick){
         .rect = {
           .pos = (V2){xpos, ypos},
           .dim = (V2){BRICK_WIDTH, BRICK_HEIGHT} },
@@ -163,80 +163,95 @@ void spawn_bricks(GameState *state)
     }
     ypos += BRICK_HEIGHT + BRICK_DELTA_Y;
   }
-  state->bricks_remaining = BRICK_COUNT_X*BRICK_COUNT_Y;
+  game_state->bricks_remaining = BRICK_COUNT_X*BRICK_COUNT_Y;
 }
 
-void reset_ball(GameState *state)
+void reset_ball(GameState *game_state)
 {
-  state->ball.pos = INITIAL_BALL_POS;
-  choose_random_ball_direction(&state->ball_direction);
-  state->ball_speed = 0.0f;
-  state->target_ball_speed = BALL_SPEED_1;
+  game_state->ball.pos = INITIAL_BALL_POS;
+  choose_random_ball_direction(&game_state->ball_direction);
+  game_state->ball_speed = 0.0f;
+  game_state->target_ball_speed = BALL_SPEED_1;
 }
 
-void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect playing_area)
+void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
 {
   // NOTE(leo): initialization
-  if(!state->initialized)
+  if(game_state->state == GAME_STATE_UNINITIALIZED)
   {
-    state->initialized = true;
+    game_state->state = GAME_STATE_WAIT_SERVE;
 
     srand(time(0));
 
     // NOTE(leo): Paddle
-    state->paddle = (Rect){
+    game_state->paddle = (Rect){
       .pos = INITIAL_PADDLE_POS,
       .dim = { PADDLE_WIDTH, PADDLE_HEIGTH }
     };
 
     // NOTE(leo): Ball
-    state->ball = (Rect){
+    game_state->ball = (Rect){
       .pos = INITIAL_BALL_POS,
       .dim = { BALL_WIDTH, BALL_HEIGHT }
     };
 
     // NOTE(leo): Bricks
-    spawn_bricks(state);
+    spawn_bricks(game_state);
 
-    state->waiting_for_serve = true;
+    game_state->balls_remaining = 3;
   }
 
-  if(state->waiting_for_serve && input->serve) {
-    if(state->balls_remaining) {
-      state->waiting_for_serve = false;
+  if(game_state->state == GAME_STATE_WAIT_SERVE && input->serve) {
+    game_state->state = GAME_STATE_PLAYING;
 
-      reset_ball(state);
-      state->paddle.dim.x = PADDLE_WIDTH;
+    reset_ball(game_state);
+    game_state->paddle.dim.x = PADDLE_WIDTH;
 
-      state->hit_count = 0;
-    }
-    else {
-      state->waiting_for_serve = false;
+    game_state->hit_count = 0;
+    /*
+      game_state->state = GAME_STATE_PLAYING;
 
-      reset_ball(state);
-      state->paddle.dim.x = PADDLE_WIDTH;
-      spawn_bricks(state);
+      reset_ball(game_state);
+      game_state->paddle.dim.x = PADDLE_WIDTH;
+      spawn_bricks(game_state);
 
-      state->hit_count = 0;
-      state->score = 0;
-      state->balls_remaining = 3;
+      game_state->hit_count = 0;
+      game_state->score = 0;
+      game_state->balls_remaining = 3;
+      */
+  }
+
+
+  // NOTE(leo): Ball lost, animate paddle back
+  if(game_state->state == GAME_STATE_BALL_LOST) {
+    F32 paddle_speed_factor = 20.0f;
+    F32 target_paddle_pos = INITIAL_PADDLE_POS.x;
+    F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
+    F32 dx = paddle_speed_factor*add_pos*dt;
+    if(fabsf(dx) > fabsf(add_pos))
+      dx = add_pos;
+    game_state->paddle.pos.x += dx;
+    if(fabsf(target_paddle_pos - game_state->paddle.pos.x) < 0.001f) {
+      game_state->state = GAME_STATE_WAIT_SERVE;
+      reset_ball(game_state);
+      game_state->paddle.pos.x = target_paddle_pos;
     }
   }
 
 
   // NOTE(leo): Physics
-  if(!state->waiting_for_serve)
+  if(game_state->state == GAME_STATE_PLAYING)
   {
     // NOTE(leo): Compute new paddle speed
     F32 paddle_speed;
     {
       F32 paddle_speed_factor = 20.0f;
-      F32 target_paddle_pos = (F32)input->paddle_control*ARENA_WIDTH - state->paddle.dim.x/2.0f;
+      F32 target_paddle_pos = (F32)input->paddle_control*ARENA_WIDTH - game_state->paddle.dim.x/2.0f;
       if(target_paddle_pos < 0.0f)
         target_paddle_pos = 0.0f;
       if(target_paddle_pos > ARENA_WIDTH)
         target_paddle_pos = ARENA_WIDTH;
-      F32 add_pos = target_paddle_pos - state->paddle.pos.x;
+      F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
       F32 dx = paddle_speed_factor*add_pos*dt;
       if(fabsf(dx) > fabsf(add_pos))
         dx = add_pos;
@@ -245,16 +260,16 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
 
     // NOTE(leo): Compute new ball speed
     {
-      bool too_fast = state->target_ball_speed < state->ball_speed;
-      F32 ball_add_speed = fabsf(state->target_ball_speed - state->ball_speed);
+      bool too_fast = game_state->target_ball_speed < game_state->ball_speed;
+      F32 ball_add_speed = fabsf(game_state->target_ball_speed - game_state->ball_speed);
       F32 ball_acceleration = 100.0f;
       F32 ball_accelerate_speed = ball_acceleration*dt;
       if(ball_accelerate_speed > ball_add_speed)
         ball_accelerate_speed = ball_add_speed;
       if(too_fast)
-        state->ball_speed -= ball_accelerate_speed;
+        game_state->ball_speed -= ball_accelerate_speed;
       else
-        state->ball_speed += ball_accelerate_speed;
+        game_state->ball_speed += ball_accelerate_speed;
     }
 
     F32 elapsed = 0.0f;
@@ -264,7 +279,7 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
 
       F32 step = dt-elapsed;
 
-      V2 ball_delta = v2_smul(step*state->ball_speed, state->ball_direction);
+      V2 ball_delta = v2_smul(step*game_state->ball_speed, game_state->ball_direction);
 
       // NOTE(leo): Compute time of impact with up to 3 bricks (eg: hit corner)
       F32 toi_bricks = 1.0f;
@@ -272,9 +287,9 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
       U8 hit_brick_edges[3] = { 0, 0, 0 };
       int hit_brick_count = 0;
       {
-        for(int brick_index = 0; brick_index < state->bricks_remaining; brick_index++) {
-          Brick *brick = &state->bricks[brick_index];
-          Impact impact = compute_impact(state->ball, ball_delta, brick->rect, (V2) { 0.0f, 0.0f });
+        for(int brick_index = 0; brick_index < game_state->bricks_remaining; brick_index++) {
+          Brick *brick = &game_state->bricks[brick_index];
+          Impact impact = compute_impact(game_state->ball, ball_delta, brick->rect, (V2) { 0.0f, 0.0f });
           if(impact.time < 1.0f && impact.time <= toi_bricks) {
             if(impact.time < toi_bricks) {
               hit_brick_count = 0;
@@ -299,7 +314,7 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
           { .pos = {0.0f, ARENA_HEIGHT}, .dim = {ARENA_WIDTH, 0.0f} },
         };
         for(int i = 0; i < 4; i++) {
-          Impact impact = compute_impact(state->ball, ball_delta, walls[i], (V2) { 0.0f, 0.0f });
+          Impact impact = compute_impact(game_state->ball, ball_delta, walls[i], (V2) { 0.0f, 0.0f });
           F32 t = impact.time;
           if(t < 1.0f && t <= toi_walls) {
             if(t < toi_walls) {
@@ -316,11 +331,11 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
       U8 hit_paddle_edges = 0;
       {
         V2 paddle_delta = { step*paddle_speed, 0.0f };
-        if(state->paddle.pos.x + paddle_delta.x < 0.0f)
-          paddle_delta.x = 0.0f - state->paddle.pos.x;
-        else if(state->paddle.pos.x + paddle_delta.x > ARENA_WIDTH - state->paddle.dim.x)
-          paddle_delta.x = ARENA_WIDTH - state->paddle.dim.x - state->paddle.pos.x;
-        Impact impact = compute_impact(state->ball, ball_delta, state->paddle, paddle_delta);
+        if(game_state->paddle.pos.x + paddle_delta.x < 0.0f)
+          paddle_delta.x = 0.0f - game_state->paddle.pos.x;
+        else if(game_state->paddle.pos.x + paddle_delta.x > ARENA_WIDTH - game_state->paddle.dim.x)
+          paddle_delta.x = ARENA_WIDTH - game_state->paddle.dim.x - game_state->paddle.pos.x;
+        Impact impact = compute_impact(game_state->ball, ball_delta, game_state->paddle, paddle_delta);
         toi_paddle = impact.time;
         hit_paddle_edges = impact.edges;
       }
@@ -352,83 +367,93 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
 
       step *= toi_min;
 
+
       // NOTE(leo): integrate by step
-      state->ball.pos = v2_add(state->ball.pos, v2_smul(step*state->ball_speed, state->ball_direction));
+      game_state->ball.pos = v2_add(game_state->ball.pos, v2_smul(step*game_state->ball_speed, game_state->ball_direction));
 
       V2 paddle_delta = { step*paddle_speed, 0.0f };
-      if(state->paddle.pos.x + paddle_delta.x < 0.0f)
-        paddle_delta.x = 0.0f - state->paddle.pos.x;
-      else if(state->paddle.pos.x + paddle_delta.x > ARENA_WIDTH - state->paddle.dim.x)
-        paddle_delta.x = ARENA_WIDTH - state->paddle.dim.x - state->paddle.pos.x;
-      state->paddle.pos = v2_add(state->paddle.pos, paddle_delta);
+      if(game_state->paddle.pos.x + paddle_delta.x < 0.0f)
+        paddle_delta.x = 0.0f - game_state->paddle.pos.x;
+      else if(game_state->paddle.pos.x + paddle_delta.x > ARENA_WIDTH - game_state->paddle.dim.x)
+        paddle_delta.x = ARENA_WIDTH - game_state->paddle.dim.x - game_state->paddle.pos.x;
+      game_state->paddle.pos = v2_add(game_state->paddle.pos, paddle_delta);
 
+
+      // NOTE(leo): Reflect off bricks
       if(hit_bricks) {
         U8 edges = 0;
         for(int i = 0; i < hit_brick_count; i++)
           edges |= hit_brick_edges[i];
-        reflect_ball(edges, &state->ball, &state->ball_direction);
-        state->hit_count += hit_brick_count;
+        reflect_ball(edges, &game_state->ball, &game_state->ball_direction);
+        game_state->hit_count += hit_brick_count;
 
         // NOTE(leo): Attribute score for hitting brick; Max ball speed if orange or red brick
         for(int i = 0; i < hit_brick_count; i++) {
-          Brick *brick = &state->bricks[hit_brick_indices[i]];
+          Brick *brick = &game_state->bricks[hit_brick_indices[i]];
           if(brick->type == 0) {
-            state->score += 1;
+            game_state->score += 1;
           }
           else if(brick->type == 1) {
-            state->score += 3;
+            game_state->score += 3;
           }
           else if(brick->type == 2) {
-            state->score += 5;
+            game_state->score += 5;
           }
           else if(brick->type == 3) {
-            state->score += 7;
-            state->target_ball_speed = BALL_SPEED_4;
+            game_state->score += 7;
+            game_state->target_ball_speed = BALL_SPEED_4;
           }
         }
 
         // NOTE(leo): Destroy hit bricks
         for(int i = 0; i < hit_brick_count; i++)
-          state->bricks[hit_brick_indices[i]] = state->bricks[--state->bricks_remaining];
+          game_state->bricks[hit_brick_indices[i]] = game_state->bricks[--game_state->bricks_remaining];
       }
 
+      // NOTE(leo): Reflect off walls
       if(hit_walls) {
-        reflect_ball(hit_wall_edges, &state->ball, &state->ball_direction);
+        reflect_ball(hit_wall_edges, &game_state->ball, &game_state->ball_direction);
         if((hit_wall_edges & EDGE_LEFT) || (hit_wall_edges & EDGE_RIGHT))
-          state->hit_count++;
+          game_state->hit_count++;
         if((hit_wall_edges & EDGE_BOTTOM) || (hit_wall_edges & EDGE_TOP))
-          state->hit_count++;
+          game_state->hit_count++;
 
         // NOTE(leo): Paddle shrinking
-        if(hit_wall_edges & EDGE_BOTTOM && state->paddle.dim.x == PADDLE_WIDTH) {
+        if(hit_wall_edges & EDGE_BOTTOM && game_state->paddle.dim.x == PADDLE_WIDTH) {
           F32 new_width = PADDLE_WIDTH/2.0f;
-          state->paddle.pos.x += PADDLE_WIDTH/2.0f - new_width/2.0f;
-          state->paddle.dim.x = new_width;
+          game_state->paddle.pos.x += PADDLE_WIDTH/2.0f - new_width/2.0f;
+          game_state->paddle.dim.x = new_width;
         }
 
+        // NOTE(leo): Round over
         if(hit_wall_edges & EDGE_TOP) {
-          state->balls_remaining--;
-          state->waiting_for_serve = true;
+          game_state->balls_remaining--;
+          if(game_state->balls_remaining)
+            game_state->state = GAME_STATE_BALL_LOST;
+          else
+            game_state->state = GAME_STATE_GAME_OVER;
           elapsed = dt;
+          break;
         }
       }
 
+      // NOTE(leo): Interact with paddle
       if(hit_paddle) {
-        state->hit_count++;
+        game_state->hit_count++;
         if(hit_paddle_edges & EDGE_TOP) {
-          V2 left = state->ball.pos;
-          V2 right = v2_add(state->ball.pos, (V2) { state->ball.dim.x, 0.0f });
-          if(left.x < state->paddle.pos.x)
-            left.x = state->paddle.pos.x;
-          if(right.x > state->paddle.pos.x + state->paddle.dim.x)
-            right.x = state->paddle.pos.x + state->paddle.dim.x;
+          V2 left = game_state->ball.pos;
+          V2 right = v2_add(game_state->ball.pos, (V2) { game_state->ball.dim.x, 0.0f });
+          if(left.x < game_state->paddle.pos.x)
+            left.x = game_state->paddle.pos.x;
+          if(right.x > game_state->paddle.pos.x + game_state->paddle.dim.x)
+            right.x = game_state->paddle.pos.x + game_state->paddle.dim.x;
           V2 mid = v2_add(v2_smul(0.5f, left), v2_smul(0.5f, right));
-          F32 hit_normalized = (mid.x - state->paddle.pos.x)/state->paddle.dim.x;
+          F32 hit_normalized = (mid.x - game_state->paddle.pos.x)/game_state->paddle.dim.x;
           // NOTE(leo): 0: -45 degs, 1: 45 degs, in between: lerp. Relative to paddle normal
           F32 PI = 3.14159f;
           F32 angle = hit_normalized*(PI/2.0f - PI/4.0f) + (1.0f - hit_normalized)*(PI/2.0f + PI/4.0f);
-          state->ball_direction.x = cosf(angle);
-          state->ball_direction.y = sinf(angle);
+          game_state->ball_direction.x = cosf(angle);
+          game_state->ball_direction.y = sinf(angle);
         }
         else if(hit_paddle_edges & EDGE_LEFT || hit_paddle_edges & EDGE_RIGHT) {
           /*
@@ -443,30 +468,30 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
               w1 = -ball_speed_x + 2*paddle_speed
               w2 = paddle_speed
           */
-          V2 w1 = { -state->ball_speed*state->ball_direction.x + 2*paddle_speed, state->ball_speed*state->ball_direction.y };
-          state->ball_speed = sqrtf(w1.x*w1.x + w1.y*w1.y);
-          state->ball_direction = v2_smul(1.0f/state->ball_speed, w1);
+          V2 w1 = { -game_state->ball_speed*game_state->ball_direction.x + 2*paddle_speed, game_state->ball_speed*game_state->ball_direction.y };
+          game_state->ball_speed = sqrtf(w1.x*w1.x + w1.y*w1.y);
+          game_state->ball_direction = v2_smul(1.0f/game_state->ball_speed, w1);
           if(hit_paddle_edges & EDGE_LEFT)
-            state->ball.pos.x += -0.001f;
+            game_state->ball.pos.x += -0.001f;
           else
-            state->ball.pos.x += 0.001f;
+            game_state->ball.pos.x += 0.001f;
         }
         else {
-          reflect_ball(hit_paddle_edges, &state->ball, &state->ball_direction);
+          assert(false && "Ball hit bottom paddle edge");
         }
       }
 
       // TODO(leo): Prevent paddle from pushing ball into wall
 
       // NOTE(leo): Ball speed
-      if(state->hit_count == 4 && state->target_ball_speed < BALL_SPEED_2)
-        state->target_ball_speed = BALL_SPEED_2;
-      else if(state->hit_count == 12 && state->target_ball_speed < BALL_SPEED_3)
-        state->target_ball_speed = BALL_SPEED_3;
+      if(game_state->hit_count == 4 && game_state->target_ball_speed < BALL_SPEED_2)
+        game_state->target_ball_speed = BALL_SPEED_2;
+      else if(game_state->hit_count == 12 && game_state->target_ball_speed < BALL_SPEED_3)
+        game_state->target_ball_speed = BALL_SPEED_3;
 
       elapsed += step;
+      assert(iterations < 25);
     }
-    assert(iterations < 25);
   }
 
   Image playing_area_image = *image;
@@ -480,24 +505,24 @@ void game_update(GameState *state, F32 dt, Input *input, Image *image, Rect play
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
-  for(int brick_index = 0; brick_index < state->bricks_remaining; brick_index++) {
-    Brick *brick = &state->bricks[brick_index];
+  for(int brick_index = 0; brick_index < game_state->bricks_remaining; brick_index++) {
+    Brick *brick = &game_state->bricks[brick_index];
     Color *color = &brick_colors[brick->type];
     draw_rectangle(v2_add(arena_offset, v2_smul(scale, brick->rect.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(brick->rect.pos, brick->rect.dim))), color->r, color->g, color->b, &playing_area_image);
   }
 
   // NOTE(leo): Draw paddle
-  draw_rectangle(v2_add(arena_offset, v2_smul(scale, state->paddle.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(state->paddle.pos, state->paddle.dim))), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, &playing_area_image);
+  draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->paddle.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->paddle.pos, game_state->paddle.dim))), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, &playing_area_image);
 
   // NOTE(leo): Draw ball
-  if(!state->waiting_for_serve)
-    draw_rectangle(v2_add(arena_offset, v2_smul(scale, state->ball.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(state->ball.pos, state->ball.dim))), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, &playing_area_image);
+  if(game_state->state != GAME_STATE_BALL_LOST)
+    draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->ball.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->ball.pos, game_state->ball.dim))), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, &playing_area_image);
 
   // NOTE(leo): Draw score
   {
-    int ones = state->score % 10;
-    int tens = (state->score / 10) % 10;
-    int hundreds = (state->score / 100) % 10;
+    int ones = game_state->score % 10;
+    int tens = (game_state->score / 10) % 10;
+    int hundreds = (game_state->score / 100) % 10;
     int numbers[3] = { hundreds, tens, ones };
     for(int i = 0; i < 3; i++) {
       // TODO(leo): Proper positioning
