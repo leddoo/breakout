@@ -198,6 +198,13 @@ void game_serve(GameState *game_state)
   game_state->hit_count = 0;
 }
 
+void change_paddle_width(GameState *game_state, F32 new_width)
+{
+  game_state->paddle.pos.x += game_state->paddle.dim.x/2.0f;
+  game_state->paddle.pos.x -= new_width/2.0f;
+  game_state->paddle.dim.x = new_width;
+}
+
 void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
 {
   // NOTE(leo): initialization
@@ -231,13 +238,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     F32 target_paddle_width = PADDLE_WIDTH;
     // NOTE(leo): Width
     {
-      V2 center = v2_add(game_state->paddle.pos, v2_smul(0.5f, game_state->paddle.dim));
       F32 add_width = target_paddle_width - game_state->paddle.dim.x;
       F32 dw = 20.0f*add_width*dt;
       if(fabsf(dw) > fabsf(add_width))
         dw = add_width;
-      game_state->paddle.dim.x += dw;
-      game_state->paddle.pos = v2_sub(center, v2_smul(0.5f, game_state->paddle.dim));
+      change_paddle_width(game_state, game_state->paddle.dim.x + dw);
     }
     // NOTE(leo): Position
     {
@@ -438,9 +443,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
         // NOTE(leo): Paddle shrinking
         if(hit_wall_edges & EDGE_BOTTOM && game_state->paddle.dim.x == PADDLE_WIDTH) {
-          F32 new_width = PADDLE_WIDTH/2.0f;
-          game_state->paddle.pos.x += PADDLE_WIDTH/2.0f - new_width/2.0f;
-          game_state->paddle.dim.x = new_width;
+          change_paddle_width(game_state, PADDLE_WIDTH/2.0f);
         }
 
         // NOTE(leo): Round over
@@ -450,8 +453,6 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
             game_state->state = GAME_STATE_BALL_LOST;
           else
             game_state->state = GAME_STATE_GAME_OVER;
-
-          game_state->paddle.dim.x = PADDLE_WIDTH;
 
           elapsed = dt;
           break;
