@@ -93,6 +93,7 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
       POINT client_pos = paddle_center_screen;
       ScreenToClient(win32_window, &client_pos);
       input->mouse = (V2){ client_pos.x, client_pos.y };
+      SetCursor(NULL);
     }
     else if(game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_CONTINUE) {
       game_state->state = GAME_STATE_PLAYING;
@@ -100,16 +101,24 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
       POINT client_pos = paddle_center_screen;
       ScreenToClient(win32_window, &client_pos);
       input->mouse = (V2){ client_pos.x, client_pos.y };
+      SetCursor(NULL);
     }
 
     win32_game_state->selected = 0;
   }
 
   if(button_just_pressed(input->key_escape)) {
-    if(game_state->state == GAME_STATE_PLAYING)
+    if(game_state->state == GAME_STATE_PLAYING) {
       game_state->state = GAME_STATE_PAUSE;
-    else if(game_state->state == GAME_STATE_PAUSE)
+    }
+    else if(game_state->state == GAME_STATE_PAUSE) {
       game_state->state = GAME_STATE_PLAYING;
+      SetCursorPos(paddle_center_screen.x, paddle_center_screen.y);
+      POINT client_pos = paddle_center_screen;
+      ScreenToClient(win32_window, &client_pos);
+      input->mouse = (V2){ client_pos.x, client_pos.y };
+      SetCursor(NULL);
+    }
   }
 
   if(game_state->state == GAME_STATE_PLAYING) {
@@ -126,9 +135,9 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
   else if(game_state->state == GAME_STATE_GAME_OVER)
     menu_entry_count = GAME_OVER_COUNT;
 
-  if(button_just_pressed(input->key_up))
+  if(menu_entry_count && button_just_pressed(input->key_up))
     win32_game_state->selected = (win32_game_state->selected - 1 + menu_entry_count) % menu_entry_count;
-  if(button_just_pressed(input->key_down))
+  if(menu_entry_count && button_just_pressed(input->key_down))
     win32_game_state->selected = (win32_game_state->selected + 1) % menu_entry_count;
 
   game_update(&win32_game_state->game_state, dt, &game_input, game_image, playing_area);

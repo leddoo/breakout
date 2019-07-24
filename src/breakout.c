@@ -184,6 +184,7 @@ void game_start(GameState *game_state)
   reset_ball(game_state);
 
   game_state->paddle.pos = INITIAL_PADDLE_POS;
+  game_state->paddle.dim.x = PADDLE_WIDTH;
 
   spawn_bricks(game_state);
 
@@ -197,6 +198,9 @@ void game_serve(GameState *game_state)
   game_state->state = GAME_STATE_PLAYING;
 
   reset_ball(game_state);
+
+  game_state->paddle.pos = INITIAL_PADDLE_POS;
+  game_state->paddle.dim.x = PADDLE_WIDTH;
 
   game_state->hit_count = 0;
 }
@@ -261,6 +265,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       game_state->state = GAME_STATE_WAIT_SERVE;
       reset_ball(game_state);
       game_state->paddle.pos.x = target_paddle_pos;
+      game_state->paddle.dim.x = PADDLE_WIDTH;
     }
   }
 
