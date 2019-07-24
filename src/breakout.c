@@ -424,10 +424,13 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
           }
           else if(brick->type == 2) {
             game_state->score += 5;
+            if(game_state->target_ball_speed < BALL_SPEED_4)
+              game_state->target_ball_speed = BALL_SPEED_4;
           }
           else if(brick->type == 3) {
             game_state->score += 7;
-            game_state->target_ball_speed = BALL_SPEED_4;
+            if(game_state->target_ball_speed < BALL_SPEED_4)
+              game_state->target_ball_speed = BALL_SPEED_4;
           }
         }
 
