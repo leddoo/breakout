@@ -1,8 +1,11 @@
-#include "util.h"
 #include "breakout.h"
+
+#include "util.h"
+#include "symbol_grids.h"
 
 #include <math.h>
 #include <time.h>
+#include <string.h>
 #include <stdlib.h>
 
 inline
@@ -754,4 +757,95 @@ Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_are
     .dim = v2_smul(scale, (V2) { ARENA_WIDTH-game_state->paddle.dim.x, 0.0f })
   };
   return result;
+}
+
+void draw_grid_top_down(bool *values, int width, int height, V2 bottom_left, F32 pixel_size, F32 r, F32 g, F32 b, Image *image)
+{
+  V2 cursor = v2_add(bottom_left, (V2) { 0.0f, (height-1)*pixel_size });
+  for(int y = 0; y < height; y++) {
+    for(int x = 0; x < width; x++) {
+      if(values[y*width + x])
+        draw_rectangle(cursor, v2_add(cursor, (V2) { pixel_size, pixel_size }), r, g, b, image);
+      cursor.x += pixel_size;
+    }
+    cursor.x = bottom_left.x;
+    cursor.y -= pixel_size;
+  }
+}
+
+void draw_symbol(char symbol, V2 bottom_left, F32 pixel_size, F32 r, F32 g, F32 b, Image *image)
+{
+  bool *grid = NULL;
+  switch(symbol) {
+    case 'A': { grid = grid_A; } break;
+    case 'B': { grid = grid_B; } break;
+    case 'C': { grid = grid_C; } break;
+    case 'D': { grid = grid_D; } break;
+    case 'E': { grid = grid_E; } break;
+    case 'F': { grid = grid_F; } break;
+    case 'G': { grid = grid_G; } break;
+    case 'H': { grid = grid_H; } break;
+    case 'I': { grid = grid_I; } break;
+    case 'J': { grid = grid_J; } break;
+    case 'K': { grid = grid_K; } break;
+    case 'L': { grid = grid_L; } break;
+    case 'M': { grid = grid_M; } break;
+    case 'N': { grid = grid_N; } break;
+    case 'O': { grid = grid_O; } break;
+    case 'P': { grid = grid_P; } break;
+    case 'Q': { grid = grid_Q; } break;
+    case 'R': { grid = grid_R; } break;
+    case 'S': { grid = grid_S; } break;
+    case 'T': { grid = grid_T; } break;
+    case 'U': { grid = grid_U; } break;
+    case 'V': { grid = grid_V; } break;
+    case 'W': { grid = grid_W; } break;
+    case 'X': { grid = grid_X; } break;
+    case 'Y': { grid = grid_Y; } break;
+    case 'Z': { grid = grid_Z; } break;
+    case '0': { grid = grid_0; } break;
+    case '1': { grid = grid_1; } break;
+    case '2': { grid = grid_2; } break;
+    case '3': { grid = grid_3; } break;
+    case '4': { grid = grid_4; } break;
+    case '5': { grid = grid_5; } break;
+    case '6': { grid = grid_6; } break;
+    case '7': { grid = grid_7; } break;
+    case '8': { grid = grid_8; } break;
+    case '9': { grid = grid_9; } break;
+    case '<': { grid = grid_less; } break;
+    case '>': { grid = grid_greater; } break;
+    case ' ': { return; };
+    default: {
+      draw_rectangle(bottom_left, v2_add(bottom_left, (V2) { SYMBOL_WIDTH*pixel_size, SYMBOL_HEIGHT*pixel_size }), 1.0f, 0.0f, 1.0f, image);
+      return;
+    } break;
+  };
+
+  draw_grid_top_down(grid, SYMBOL_WIDTH, SYMBOL_HEIGHT, bottom_left, pixel_size, r, g, b, image);
+}
+
+void draw_text(char *text, V2 bottom_left, F32 pixel_size, F32 r, F32 g, F32 b, Image *image)
+{
+  int symbol_count = strlen(text);
+
+  V2 cursor = bottom_left;
+
+  for(int i = 0; i < symbol_count; i++) {
+    draw_symbol(text[i], cursor, pixel_size, r, g, b, image);
+    cursor.x += (SYMBOL_WIDTH+SYMBOL_SPACING)*pixel_size;
+  }
+}
+
+void draw_text_centered(char *text, V2 center, F32 pixel_size, F32 r, F32 g, F32 b, Image *image)
+{
+  int symbol_count = strlen(text);
+
+  Rect text_rect = {
+    .pos = center,
+    .dim = { SYMBOL_WIDTH*pixel_size*symbol_count + SYMBOL_SPACING*pixel_size*(symbol_count-1), SYMBOL_HEIGHT*pixel_size },
+  };
+  text_rect.pos = v2_sub(text_rect.pos, v2_smul(0.5f, text_rect.dim));
+
+  draw_text(text, text_rect.pos, pixel_size, r, g, b, image);
 }

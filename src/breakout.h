@@ -99,3 +99,11 @@ Rect compute_playing_area(V2 image_size);
 
 Rect compute_paddle_rect_in_image(GameState *game_state, Rect playing_area);
 Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_area);
+
+void draw_text(char *text, V2 bottom_left, F32 pixel_size, F32 r, F32 g, F32 b, Image *image);
+void draw_text_centered(char *text, V2 center, F32 pixel_size, F32 r, F32 g, F32 b, Image *image);
+
+#define SYMBOL_WIDTH 5
+#define SYMBOL_HEIGHT 7
+#define SYMBOL_SPACING 1
+#define LINE_HEIGHT (SYMBOL_HEIGHT+2*SYMBOL_SPACING)

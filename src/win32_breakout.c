@@ -7,22 +7,28 @@
 enum {
   MAIN_PLAY,
   MAIN_QUIT,
+  MAIN_COUNT,
 };
 
 enum {
   WAIT_SERVE_SERVE,
+  WAIT_SERVE_COUNT,
 };
 
 enum {
   PAUSE_CONTINUE,
   PAUSE_RESTART,
   PAUSE_QUIT,
+  PAUSE_COUNT,
 };
 
 enum {
   GAME_OVER_RESTART,
   GAME_OVER_QUIT,
+  GAME_OVER_COUNT
 };
+
+#define MAX_MENU_ENTRY_COUNT (max(max(max(MAIN_COUNT, WAIT_SERVE_COUNT), PAUSE_COUNT), GAME_OVER_COUNT))
 
 typedef struct Win32GameState {
   GameState game_state;
@@ -110,7 +116,79 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     game_input.paddle_control = (input->mouse.x - paddle_motion_rect.pos.x) / paddle_motion_rect.dim.x;
   }
 
+  int menu_entry_count = 0;
+  if(game_state->state == GAME_STATE_MAIN_MENU)
+    menu_entry_count = MAIN_COUNT;
+  else if(game_state->state == GAME_STATE_WAIT_SERVE)
+    menu_entry_count = WAIT_SERVE_COUNT;
+  else if(game_state->state == GAME_STATE_PAUSE)
+    menu_entry_count = PAUSE_COUNT;
+  else if(game_state->state == GAME_STATE_GAME_OVER)
+    menu_entry_count = GAME_OVER_COUNT;
+
+  if(button_just_pressed(input->key_up))
+    win32_game_state->selected = (win32_game_state->selected - 1 + menu_entry_count) % menu_entry_count;
+  if(button_just_pressed(input->key_down))
+    win32_game_state->selected = (win32_game_state->selected + 1) % menu_entry_count;
+
   game_update(&win32_game_state->game_state, dt, &game_input, game_image, playing_area);
+
+
+  char *header = NULL;
+  char *texts[MAX_MENU_ENTRY_COUNT] = { NULL };
+  int text_count = 0;
+
+  if(game_state->state == GAME_STATE_MAIN_MENU) {
+    header = "BREAKOUT";
+    texts[0] = "PLAY";
+    texts[1] = "QUIT";
+    if(win32_game_state->selected == MAIN_PLAY)
+      texts[0] = "> PLAY <";
+    else if(win32_game_state->selected == MAIN_QUIT)
+      texts[1] = "> QUIT <";
+    text_count = MAIN_COUNT;
+  }
+  else if(game_state->state == GAME_STATE_WAIT_SERVE) {
+    texts[0] = "SERVE";
+    if(win32_game_state->selected == WAIT_SERVE_SERVE)
+      texts[0] = "> SERVE <";
+    text_count = WAIT_SERVE_COUNT;
+  }
+  else if(game_state->state == GAME_STATE_PAUSE) {
+    header = "PAUSED";
+    texts[0] = "CONTINUE";
+    texts[1] = "RESTART";
+    texts[2] = "QUIT";
+    if(win32_game_state->selected == PAUSE_CONTINUE)
+      texts[0] = "> CONTINUE <";
+    else if(win32_game_state->selected == PAUSE_RESTART)
+      texts[1] = "> RESTART <";
+    else if(win32_game_state->selected == PAUSE_QUIT)
+      texts[2] = "> QUIT <";
+    text_count = PAUSE_COUNT;
+  }
+  else if(game_state->state == GAME_STATE_GAME_OVER) {
+    header = "GAME OVER";
+    texts[0] = "RESTART";
+    texts[1] = "QUIT";
+    if(win32_game_state->selected == GAME_OVER_RESTART)
+      texts[0] = "> RESTART <";
+    else if(win32_game_state->selected == GAME_OVER_QUIT)
+      texts[1] = "> QUIT <";
+    text_count = GAME_OVER_COUNT;
+  }
+
+  {
+    V2 cursor = { playing_area.pos.x + playing_area.dim.x/2.0f, playing_area.pos.y + playing_area.dim.y/2.0f };
+    if(header) {
+      draw_text_centered(header, cursor, 8.0f, 0.9f, 0.9f, 0.9f, game_image);
+      cursor.y -= LINE_HEIGHT*8.0f * 1.5f;
+    }
+    for(int i = 0; i < text_count; i++) {
+      draw_text_centered(texts[i], cursor, 5.0f, 0.9f, 0.9f, 0.9f, game_image);
+      cursor.y -= LINE_HEIGHT*5.0f;
+    }
+  }
 
   return true;
 }
@@ -119,7 +197,6 @@ bool win32_cursor_hidden(GameMemory *game_memory)
 {
   Win32GameState *win32_game_state = (Win32GameState *)&game_memory->memory;
   GameState *game_state = &win32_game_state->game_state;
-  return false;
   return game_state->state == GAME_STATE_PLAYING;
 }
 
