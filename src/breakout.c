@@ -191,6 +191,7 @@ void game_start(GameState *game_state)
   game_state->hit_count = 0;
   game_state->score = 0;
   game_state->balls_remaining = 3;
+  game_state->has_cleared_bricks = false;
 }
 
 void game_serve(GameState *game_state)
@@ -442,6 +443,20 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         // NOTE(leo): Destroy hit bricks
         for(int i = 0; i < hit_brick_count; i++)
           game_state->bricks[hit_brick_indices[i]] = game_state->bricks[--game_state->bricks_remaining];
+
+        // NOTE(leo): Second set of bricks
+        if(game_state->bricks_remaining == 0) {
+          if(game_state->has_cleared_bricks) {
+            game_state->state = GAME_STATE_GAME_OVER;
+          }
+          else {
+            spawn_bricks(game_state);
+            game_state->state = GAME_STATE_BALL_LOST;
+            game_state->has_cleared_bricks = true;
+          }
+          elapsed = dt;
+          break;
+        }
       }
 
       // NOTE(leo): Reflect off walls

@@ -84,6 +84,7 @@ typedef struct GameState {
   int score;
   int hit_count;
   int balls_remaining;
+  bool has_cleared_bricks;
 } GameState;
 
 typedef struct Input {
