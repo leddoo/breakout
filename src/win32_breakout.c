@@ -232,11 +232,11 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
   {
     V2 cursor = { playing_area.pos.x + playing_area.dim.x/2.0f, playing_area.pos.y + playing_area.dim.y/2.0f };
     if(header) {
-      draw_text_centered(header, cursor, 8.0f, 0.9f, 0.9f, 0.9f, game_image);
+      draw_text_centered(header, cursor, 8.0f, COLOR_WHITE, game_image);
       cursor.y -= LINE_HEIGHT*8.0f * 1.5f;
     }
     for(int i = 0; i < text_count; i++) {
-      draw_text_centered(texts[i], cursor, 5.0f, 0.9f, 0.9f, 0.9f, game_image);
+      draw_text_centered(texts[i], cursor, 5.0f, COLOR_WHITE, game_image);
       cursor.y -= LINE_HEIGHT*5.0f;
     }
   }

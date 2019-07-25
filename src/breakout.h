@@ -15,16 +15,12 @@
 #define PADDLE_HEIGTH 3.0f
 #define PADDLE_Y 6.0f
 
-#define PADDLE_COLOR_R 0.0f
-#define PADDLE_COLOR_G 0.5f
-#define PADDLE_COLOR_B 0.78f
+#define PADDLE_COLOR ((Color){ 0.0f, 0.5f, 0.78f, 1.0f })
 
 #define BALL_WIDTH 2.0f
 #define BALL_HEIGHT 1.5f
 
-#define BALL_COLOR_R 0.82f
-#define BALL_COLOR_G 0.82f
-#define BALL_COLOR_B 0.82f
+#define BALL_COLOR ((Color){ 0.82f, 0.82f, 0.82f, 1.0f })
 
 #define ARENA_WIDTH (BRICK_COUNT_X*BRICK_WIDTH + (BRICK_COUNT_X+1)*BRICK_DELTA_X)
 #define ARENA_HEIGHT 140.0f
@@ -111,8 +107,14 @@ Rect compute_playing_area(V2 image_size);
 Rect compute_paddle_rect_in_image(GameState *game_state, Rect playing_area);
 Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_area);
 
-void draw_text(char *text, V2 bottom_left, F32 pixel_size, F32 r, F32 g, F32 b, Image *image);
-void draw_text_centered(char *text, V2 center, F32 pixel_size, F32 r, F32 g, F32 b, Image *image);
+typedef struct Color {
+  F32 r, g, b, a;
+} Color;
+
+#define COLOR_WHITE ((Color){1.0f, 1.0f, 1.0f, 1.0f})
+
+void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, Image *image);
+void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Image *image);
 
 #define SYMBOL_WIDTH 5
 #define SYMBOL_HEIGHT 7
