@@ -149,24 +149,11 @@ void choose_random_ball_direction(V2 *ball_direction)
   ball_direction->y = sqrtf(1.0f - ball_direction->x*ball_direction->x);
 }
 
-void spawn_bricks(GameState *game_state)
+void reset_bricks(GameState *game_state)
 {
-  F32 ypos = FIRST_BRICK_HEIGHT;
-  for(int y = 0; y < BRICK_COUNT_Y; y++) {
-    F32 xpos = BRICK_DELTA_X;
-    for(int x = 0; x < BRICK_COUNT_X; x++) {
-      game_state->bricks[y*BRICK_COUNT_X + x] = (Brick){
-        .rect = {
-          .pos = (V2){xpos, ypos},
-          .dim = (V2){BRICK_WIDTH, BRICK_HEIGHT} },
-        .type = y/2
-      };
-
-      xpos += BRICK_WIDTH + BRICK_DELTA_X;
-    }
-    ypos += BRICK_HEIGHT + BRICK_DELTA_Y;
-  }
-  game_state->bricks_remaining = BRICK_COUNT_X*BRICK_COUNT_Y;
+  for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++)
+    game_state->is_brick_broken[brick_index] = false;
+  game_state->bricks_remaining = BRICK_COUNT;
 }
 
 void reset_ball(GameState *game_state)
@@ -187,7 +174,7 @@ void game_start(GameState *game_state)
   game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
   game_state->is_paddle_shrunk = false;
 
-  spawn_bricks(game_state);
+  reset_bricks(game_state);
 
   game_state->hit_count = 0;
   game_state->score = 0;
@@ -216,6 +203,26 @@ void change_paddle_width(GameState *game_state, F32 new_width)
   game_state->paddle.dim.x = new_width;
 }
 
+Rect compute_brick_rect(int brick_index)
+{
+  int x = brick_index%BRICK_COUNT_X;
+  int y = brick_index/BRICK_COUNT_X;
+  F32 xpos = BRICK_DELTA_X + (BRICK_WIDTH + BRICK_DELTA_X) * x;
+  F32 ypos = FIRST_BRICK_HEIGHT + (BRICK_HEIGHT + BRICK_DELTA_Y) * y;
+  Rect result = {
+    .pos = (V2){xpos, ypos},
+    .dim = (V2){BRICK_WIDTH, BRICK_HEIGHT}
+  };
+  return result;
+}
+
+U32 compute_brick_type(int brick_index)
+{
+  int y = brick_index/BRICK_COUNT_X;
+  U32 result = y/2;
+  return result;
+}
+
 void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
 {
   // NOTE(leo): initialization
@@ -241,7 +248,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     };
 
     // NOTE(leo): Bricks
-    spawn_bricks(game_state);
+    reset_bricks(game_state);
 
     game_state->balls_remaining = 3;
   }
@@ -326,9 +333,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       U8 hit_brick_edges[3] = { 0, 0, 0 };
       int hit_brick_count = 0;
       {
-        for(int brick_index = 0; brick_index < game_state->bricks_remaining; brick_index++) {
-          Brick *brick = &game_state->bricks[brick_index];
-          Impact impact = compute_impact(game_state->ball, ball_delta, brick->rect, (V2) { 0.0f, 0.0f });
+        for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
+          if(game_state->is_brick_broken[brick_index])
+            continue;
+
+          Impact impact = compute_impact(game_state->ball, ball_delta, compute_brick_rect(brick_index), (V2) { 0.0f, 0.0f });
           if(impact.time < 1.0f && impact.time <= toi_bricks) {
             if(impact.time < toi_bricks) {
               hit_brick_count = 0;
@@ -481,28 +490,25 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
         // NOTE(leo): Attribute score for hitting brick; Max ball speed if orange or red brick
         for(int i = 0; i < hit_brick_count; i++) {
-          Brick *brick = &game_state->bricks[hit_brick_indices[i]];
-          if(brick->type == 0) {
+          game_state->is_brick_broken[hit_brick_indices[i]] = true;
+          U32 brick_type = compute_brick_type(hit_brick_indices[i]);
+          if(brick_type == 0) {
             game_state->score += roundf(1 * game_state->difficulty_factor);
           }
-          else if(brick->type == 1) {
+          else if(brick_type == 1) {
             game_state->score += roundf(3 * game_state->difficulty_factor);
           }
-          else if(brick->type == 2) {
+          else if(brick_type == 2) {
             game_state->score += roundf(5 * game_state->difficulty_factor);
             if(game_state->target_ball_speed < BALL_SPEED_4)
               game_state->target_ball_speed = BALL_SPEED_4;
           }
-          else if(brick->type == 3) {
+          else if(brick_type == 3) {
             game_state->score += roundf(7 * game_state->difficulty_factor);
             if(game_state->target_ball_speed < BALL_SPEED_4)
               game_state->target_ball_speed = BALL_SPEED_4;
           }
         }
-
-        // NOTE(leo): Destroy hit bricks
-        for(int i = 0; i < hit_brick_count; i++)
-          game_state->bricks[hit_brick_indices[i]] = game_state->bricks[--game_state->bricks_remaining];
 
         // NOTE(leo): Second set of bricks
         if(game_state->bricks_remaining == 0) {
@@ -510,7 +516,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
             game_state->state = GAME_STATE_GAME_OVER;
           }
           else {
-            spawn_bricks(game_state);
+            reset_bricks(game_state);
             game_state->state = GAME_STATE_RESET_PADDLE;
             game_state->has_cleared_bricks = true;
           }
@@ -587,10 +593,12 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
-  for(int brick_index = 0; brick_index < game_state->bricks_remaining; brick_index++) {
-    Brick *brick = &game_state->bricks[brick_index];
-    Color *color = &brick_colors[brick->type];
-    draw_rectangle(v2_add(arena_offset, v2_smul(scale, brick->rect.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(brick->rect.pos, brick->rect.dim))), color->r, color->g, color->b, &playing_area_image);
+  for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
+    if(game_state->is_brick_broken[brick_index])
+      continue;
+    Color *color = &brick_colors[compute_brick_type(brick_index)];
+    Rect brick_rect = compute_brick_rect(brick_index);
+    draw_rectangle(v2_add(arena_offset, v2_smul(scale, brick_rect.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(brick_rect.pos, brick_rect.dim))), color->r, color->g, color->b, &playing_area_image);
   }
 
   // NOTE(leo): Draw paddle

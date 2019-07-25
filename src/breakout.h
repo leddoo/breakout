@@ -4,6 +4,7 @@
 
 #define BRICK_COUNT_X 14
 #define BRICK_COUNT_Y 8
+#define BRICK_COUNT (BRICK_COUNT_X*BRICK_COUNT_Y)
 #define FIRST_BRICK_HEIGHT 90.0f
 #define BRICK_WIDTH 7.0f
 #define BRICK_HEIGHT 2.0f
@@ -37,12 +38,6 @@
 #define BALL_SPEED_2 75.0f
 #define BALL_SPEED_3 100.0f
 #define BALL_SPEED_4 125.0f
-
-
-typedef struct Brick {
-  Rect rect;
-  U32 type;
-} Brick;
 
 enum {
   GAME_STATE_UNINITIALIZED = 0,
@@ -92,7 +87,7 @@ typedef struct GameState {
   Rect paddle;
   bool is_paddle_shrunk;
 
-  Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
+  bool is_brick_broken[BRICK_COUNT];
   int bricks_remaining;
 
   F32 difficulty_factor;
