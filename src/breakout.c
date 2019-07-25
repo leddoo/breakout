@@ -569,6 +569,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
   // NOTE(leo): Draw arena
   draw_rectangle(v2_smul(scale, (V2){0.0f, 0.0f}), v2_smul(scale, (V2){2.0f, PLAYING_AREA_HEIGHT}), 1.0f, 1.0f, 1.0f, &playing_area_image);
   draw_rectangle(v2_smul(scale, (V2){2.0f+ARENA_WIDTH, 0.0f}), v2_smul(scale, (V2){2.0f+ARENA_WIDTH+2.0f, PLAYING_AREA_HEIGHT}), 1.0f, 1.0f, 1.0f, &playing_area_image);
+  draw_rectangle(v2_smul(scale, (V2){2.0f, ARENA_HEIGHT}), v2_smul(scale, (V2){2.0f+ARENA_WIDTH, ARENA_HEIGHT+2.0f}), 1.0f, 1.0f, 1.0f, &playing_area_image);
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
