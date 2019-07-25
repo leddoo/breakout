@@ -25,13 +25,13 @@ enum {
 enum {
   PAUSE_CONTINUE,
   PAUSE_RESTART,
-  PAUSE_QUIT,
+  PAUSE_MAIN_MENU,
   PAUSE_COUNT,
 };
 
 enum {
   GAME_OVER_RESTART,
-  GAME_OVER_QUIT,
+  GAME_OVER_MAIN_MENU,
   GAME_OVER_COUNT
 };
 
@@ -100,10 +100,7 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     {
       game_start(game_state);
     }
-    else if((game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_QUIT)
-      || (game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_QUIT)
-      || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_QUIT))
-    {
+    else if(game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_QUIT) {
       return false;
     }
     else if(game_state->state == GAME_STATE_WAIT_SERVE && win32_game_state->selected == WAIT_SERVE_SERVE) {
@@ -121,6 +118,13 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
       ScreenToClient(win32_window, &client_pos);
       input->mouse = (V2){ client_pos.x, client_pos.y };
       SetCursor(NULL);
+    }
+    else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_MAIN_MENU)
+      || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_MAIN_MENU))
+    {
+      game_state->difficulty_factor = 1.0f;
+      game_start(game_state);
+      game_state->state = GAME_STATE_MAIN_MENU;
     }
 
     if(game_state->state != GAME_STATE_DIFFICULTY_SELECT)
@@ -202,13 +206,13 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     header = "PAUSED";
     texts[0] = "CONTINUE";
     texts[1] = "RESTART";
-    texts[2] = "QUIT";
+    texts[2] = "MAIN MENU";
     if(win32_game_state->selected == PAUSE_CONTINUE)
       texts[0] = "> CONTINUE <";
     else if(win32_game_state->selected == PAUSE_RESTART)
       texts[1] = "> RESTART <";
-    else if(win32_game_state->selected == PAUSE_QUIT)
-      texts[2] = "> QUIT <";
+    else if(win32_game_state->selected == PAUSE_MAIN_MENU)
+      texts[2] = "> MAIN MENU <";
     text_count = PAUSE_COUNT;
   }
   else if(game_state->state == GAME_STATE_GAME_OVER) {
@@ -217,11 +221,11 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     else
       header = "GAME OVER";
     texts[0] = "RESTART";
-    texts[1] = "QUIT";
+    texts[1] = "MAIN MENU";
     if(win32_game_state->selected == GAME_OVER_RESTART)
       texts[0] = "> RESTART <";
-    else if(win32_game_state->selected == GAME_OVER_QUIT)
-      texts[1] = "> QUIT <";
+    else if(win32_game_state->selected == GAME_OVER_MAIN_MENU)
+      texts[1] = "> MAIN MENU <";
     text_count = GAME_OVER_COUNT;
   }
 
