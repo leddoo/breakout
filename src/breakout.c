@@ -546,11 +546,13 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
       // TODO(leo): Prevent paddle from pushing ball into wall
 
-      // NOTE(leo): Ball speed
-      if(game_state->hit_count == 4 && game_state->target_ball_speed < BALL_SPEED_2)
-        game_state->target_ball_speed = BALL_SPEED_2;
-      else if(game_state->hit_count == 12 && game_state->target_ball_speed < BALL_SPEED_3)
-        game_state->target_ball_speed = BALL_SPEED_3;
+      // NOTE(leo): Ball speed gameplay logic
+      if(game_state->state == GAME_STATE_PLAYING) {
+        if(game_state->hit_count == 4 && game_state->target_ball_speed < BALL_SPEED_2)
+          game_state->target_ball_speed = BALL_SPEED_2;
+        else if(game_state->hit_count == 12 && game_state->target_ball_speed < BALL_SPEED_3)
+          game_state->target_ball_speed = BALL_SPEED_3;
+      }
 
       elapsed += step;
       if(iterations > 25) {
