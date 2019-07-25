@@ -183,8 +183,8 @@ void game_start(GameState *game_state)
 
   reset_ball(game_state);
 
-  game_state->paddle.pos = INITIAL_PADDLE_POS;
-  game_state->paddle.dim.x = PADDLE_WIDTH;
+  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f);
+  game_state->paddle.dim.x = game_state->initial_paddle_width;
 
   spawn_bricks(game_state);
 
@@ -200,8 +200,8 @@ void game_serve(GameState *game_state)
 
   reset_ball(game_state);
 
-  game_state->paddle.pos = INITIAL_PADDLE_POS;
-  game_state->paddle.dim.x = PADDLE_WIDTH;
+  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f);
+  game_state->paddle.dim.x = game_state->initial_paddle_width;
 
   game_state->hit_count = 0;
   game_state->balls_remaining--;
@@ -224,9 +224,10 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     srand(time(0));
 
     // NOTE(leo): Paddle
+    game_state->initial_paddle_width = PADDLE_WIDTH;
     game_state->paddle = (Rect){
-      .pos = INITIAL_PADDLE_POS,
-      .dim = { PADDLE_WIDTH, PADDLE_HEIGTH }
+      .pos = { INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f), PADDLE_Y },
+      .dim = { game_state->initial_paddle_width, PADDLE_HEIGTH }
     };
 
     // NOTE(leo): Ball
@@ -241,11 +242,10 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     game_state->balls_remaining = 3;
   }
 
-  // NOTE(leo): Ball lost, animate paddle back
-  if(game_state->state == GAME_STATE_BALL_LOST) {
-    F32 target_paddle_pos = INITIAL_PADDLE_POS.x;
-    F32 target_paddle_width = PADDLE_WIDTH;
+  // NOTE(leo): Animate paddle back
+  if(game_state->state == GAME_STATE_RESET_PADDLE) {
     // NOTE(leo): Width
+    F32 target_paddle_width = game_state->initial_paddle_width;
     {
       F32 add_width = target_paddle_width - game_state->paddle.dim.x;
       F32 dw = 20.0f*add_width*dt;
@@ -254,6 +254,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       change_paddle_width(game_state, game_state->paddle.dim.x + dw);
     }
     // NOTE(leo): Position
+    F32 target_paddle_pos = INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f);
     {
       F32 paddle_speed_factor = 20.0f;
       F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
@@ -267,7 +268,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       game_state->state = GAME_STATE_WAIT_SERVE;
       reset_ball(game_state);
       game_state->paddle.pos.x = target_paddle_pos;
-      game_state->paddle.dim.x = PADDLE_WIDTH;
+      game_state->paddle.dim.x = game_state->initial_paddle_width;
     }
   }
 
@@ -506,7 +507,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
           }
           else {
             spawn_bricks(game_state);
-            game_state->state = GAME_STATE_BALL_LOST;
+            game_state->state = GAME_STATE_RESET_PADDLE;
             game_state->has_cleared_bricks = true;
           }
           elapsed = dt;
@@ -522,14 +523,14 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
           game_state->hit_count++;
 
         // NOTE(leo): Paddle shrinking
-        if(hit_wall_edges & EDGE_BOTTOM && game_state->paddle.dim.x == PADDLE_WIDTH) {
-          change_paddle_width(game_state, PADDLE_WIDTH/2.0f);
+        if(hit_wall_edges & EDGE_BOTTOM && game_state->paddle.dim.x == game_state->initial_paddle_width) {
+          change_paddle_width(game_state, game_state->initial_paddle_width/2.0f);
         }
 
         // NOTE(leo): Round over
         if(hit_wall_edges & EDGE_TOP) {
           if(game_state->balls_remaining)
-            game_state->state = GAME_STATE_BALL_LOST;
+            game_state->state = GAME_STATE_RESET_PADDLE;
           else
             game_state->state = GAME_STATE_GAME_OVER;
 
@@ -591,7 +592,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
   draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->paddle.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->paddle.pos, game_state->paddle.dim))), PADDLE_COLOR_R, PADDLE_COLOR_G, PADDLE_COLOR_B, &playing_area_image);
 
   // NOTE(leo): Draw ball
-  if(game_state->state != GAME_STATE_BALL_LOST)
+  if((game_state->state != GAME_STATE_MAIN_MENU) && (game_state->state != GAME_STATE_DIFFICULTY_SELECT) && (game_state->state != GAME_STATE_RESET_PADDLE))
     draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->ball.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->ball.pos, game_state->ball.dim))), BALL_COLOR_R, BALL_COLOR_G, BALL_COLOR_B, &playing_area_image);
 
   // NOTE(leo): Draw score
@@ -635,10 +636,13 @@ Rect compute_playing_area(V2 image_size)
     result.dim = (V2){ image_size.x, actual_height };
   }
 
+  // TODO(leo): This "breaks" the paddle control (jumps when start playing). Do flooring for playing area bound rects?
+  /*
   result.pos.x = roundf(result.pos.x);
   result.pos.y = roundf(result.pos.y);
   result.dim.x = roundf(result.dim.x);
   result.dim.y = roundf(result.dim.y);
+  */
 
   return result;
 }

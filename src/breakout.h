@@ -31,7 +31,7 @@
 #define PLAYING_AREA_HEIGHT (ARENA_HEIGHT + 2.0f + 20.0f)
 
 #define INITIAL_BALL_POS ((V2){ARENA_WIDTH/2.0f - BALL_WIDTH/2.0f, PADDLE_Y + 10.0f})
-#define INITIAL_PADDLE_POS ((V2){ARENA_WIDTH/2.0f - PADDLE_WIDTH/2.0f, PADDLE_Y})
+#define INITIAL_PADDLE_POS(paddle_width) (ARENA_WIDTH/2.0f - paddle_width/2.0f)
 
 #define BALL_SPEED_1 50.0f
 #define BALL_SPEED_2 75.0f
@@ -48,24 +48,37 @@ enum {
   GAME_STATE_UNINITIALIZED = 0,
 
   GAME_STATE_MAIN_MENU,
+  GAME_STATE_DIFFICULTY_SELECT,
 
   GAME_STATE_WAIT_SERVE,
-
   GAME_STATE_PLAYING,
 
-  GAME_STATE_BALL_LOST,
   GAME_STATE_GAME_OVER,
   GAME_STATE_PAUSE,
+
+  GAME_STATE_RESET_PADDLE,
+  GAME_STATE_RESET_GAME,
+
+  GAME_STATE_COUNT,
 };
 
 /*
-                                       .-----------------------.-------------------------.
-                                       v                       |                         |
-    uninitialized -> main_menu -> wait_serve -> playing .-> ball_lost (move paddle back) |
-                                                   ^    |-> game_over -------------------'
-                                                   |    '-> pause
-                                                   |          |
-                                                   '----------'
+    uninitialized -> main_menu -> difficulty_select
+                         ^               |
+                         |               V
+                         |           wait_serve -> playing <------------------.
+                         |               ^            |                       |
+                         |               |      .-----'-------.---------.     |
+                         |               |      |             |         |     |
+                         |               |      V             V         V     |
+                         |               |- reset_paddle  game_over   paused -'
+                         |               |                    |         |
+                         |               |                    '---.-----'---.
+                         |               |                        |         |
+                         |               |                        V         |
+                         |               '------------------- reset_game    |
+                         |                                                 |
+                         '-------------------------------------------------'
 */
 
 typedef struct GameState {
@@ -77,6 +90,7 @@ typedef struct GameState {
   F32 target_ball_speed;
 
   Rect paddle;
+  F32 initial_paddle_width;
 
   Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
   int bricks_remaining;

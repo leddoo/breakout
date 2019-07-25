@@ -11,6 +11,13 @@ enum {
 };
 
 enum {
+  DIFFICULTY_EASY,
+  DIFFICULTY_NORMAL,
+  DIFFICULTY_HARD,
+  DIFFICULTY_COUNT,
+};
+
+enum {
   WAIT_SERVE_SERVE,
   WAIT_SERVE_COUNT,
 };
@@ -28,7 +35,7 @@ enum {
   GAME_OVER_COUNT
 };
 
-#define MAX_MENU_ENTRY_COUNT (max(max(max(MAIN_COUNT, WAIT_SERVE_COUNT), PAUSE_COUNT), GAME_OVER_COUNT))
+#define MAX_MENU_ENTRY_COUNT (max(max(max(max(MAIN_COUNT, DIFFICULTY_COUNT), WAIT_SERVE_COUNT), PAUSE_COUNT), GAME_OVER_COUNT))
 
 typedef struct Win32GameState {
   GameState game_state;
@@ -75,8 +82,20 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
   bool interact = button_just_pressed(input->key_return) || button_just_pressed(input->key_space);
 
   if(interact) {
-    if((game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_PLAY)
-      || (game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_RESTART)
+    if((game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_PLAY)) {
+      game_state->state = GAME_STATE_DIFFICULTY_SELECT;
+      win32_game_state->selected = DIFFICULTY_NORMAL;
+    }
+    else if(game_state->state == GAME_STATE_DIFFICULTY_SELECT) {
+      game_start(game_state);
+      game_state->initial_paddle_width = PADDLE_WIDTH;
+      if(win32_game_state->selected == DIFFICULTY_EASY)
+        game_state->initial_paddle_width *= 2.0f;
+      else if(win32_game_state->selected == DIFFICULTY_HARD)
+        game_state->initial_paddle_width *= 0.5f;
+      game_state->state = GAME_STATE_RESET_PADDLE;
+    }
+    else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_RESTART)
       || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_RESTART))
     {
       game_start(game_state);
@@ -104,7 +123,8 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
       SetCursor(NULL);
     }
 
-    win32_game_state->selected = 0;
+    if(game_state->state != GAME_STATE_DIFFICULTY_SELECT)
+      win32_game_state->selected = 0;
   }
 
   if(button_just_pressed(input->key_escape)) {
@@ -128,6 +148,8 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
   int menu_entry_count = 0;
   if(game_state->state == GAME_STATE_MAIN_MENU)
     menu_entry_count = MAIN_COUNT;
+  else if(game_state->state == GAME_STATE_DIFFICULTY_SELECT)
+    menu_entry_count = DIFFICULTY_COUNT;
   else if(game_state->state == GAME_STATE_WAIT_SERVE)
     menu_entry_count = WAIT_SERVE_COUNT;
   else if(game_state->state == GAME_STATE_PAUSE)
@@ -156,6 +178,19 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     else if(win32_game_state->selected == MAIN_QUIT)
       texts[1] = "> QUIT <";
     text_count = MAIN_COUNT;
+  }
+  else if(game_state->state == GAME_STATE_DIFFICULTY_SELECT) {
+    header = "DIFFICULTY";
+    texts[0] = "EASY";
+    texts[1] = "NORMAL";
+    texts[2] = "HARD";
+    if(win32_game_state->selected == DIFFICULTY_EASY)
+      texts[0] = "> EASY <";
+    else if(win32_game_state->selected == DIFFICULTY_NORMAL)
+      texts[1] = "> NORMAL <";
+    else if(win32_game_state->selected == DIFFICULTY_HARD)
+      texts[2] = "> HARD <";
+    text_count = DIFFICULTY_COUNT;
   }
   else if(game_state->state == GAME_STATE_WAIT_SERVE) {
     texts[0] = "SERVE";
