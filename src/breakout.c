@@ -565,8 +565,14 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
   Image playing_area_image = *image;
   playing_area_image.memory = &image->memory[(int)playing_area.pos.y*image->pitch + (int)playing_area.pos.x];
+  playing_area_image.width = playing_area.dim.x;
+  playing_area_image.height = playing_area.dim.y;
   F32 scale = playing_area.dim.x/PLAYING_AREA_WIDTH;
   V2 arena_offset = v2_smul(scale, (V2) { 2.0f, 0.0f });
+
+  // NOTE(leo): Draw playing area boundaries (only visible if window width is too small)
+  draw_rectangle(v2_add(playing_area.pos, (V2) { 0.0f, -scale*2.0f }), v2_add(playing_area.pos, (V2) { playing_area.dim.x, 0.0f }), 1.0f, 1.0f, 1.0f, image);
+  draw_rectangle(v2_add(playing_area.pos, (V2) { 0.0f, playing_area.dim.y }), v2_add(playing_area.pos, (V2) { playing_area.dim.x, playing_area.dim.y + scale*2.0f }), 1.0f, 1.0f, 1.0f, image);
 
   // NOTE(leo): Draw arena
   draw_rectangle(v2_smul(scale, (V2){0.0f, 0.0f}), v2_smul(scale, (V2){2.0f, PLAYING_AREA_HEIGHT}), 1.0f, 1.0f, 1.0f, &playing_area_image);
@@ -628,6 +634,11 @@ Rect compute_playing_area(V2 image_size)
     result.pos = (V2){ 0.0f, image_size.y/2.0f - actual_height/2.0f };
     result.dim = (V2){ image_size.x, actual_height };
   }
+
+  result.pos.x = roundf(result.pos.x);
+  result.pos.y = roundf(result.pos.y);
+  result.dim.x = roundf(result.dim.x);
+  result.dim.y = roundf(result.dim.y);
 
   return result;
 }
