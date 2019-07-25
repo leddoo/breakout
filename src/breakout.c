@@ -272,10 +272,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
 
   // NOTE(leo): Physics
-  if(game_state->state == GAME_STATE_PLAYING)
+  if(game_state->state == GAME_STATE_PLAYING || game_state->state == GAME_STATE_GAME_OVER)
   {
     // NOTE(leo): Compute new paddle speed
-    F32 paddle_speed;
+    F32 paddle_speed = 0.0f;
+    if(game_state->state == GAME_STATE_PLAYING)
     {
       F32 paddle_speed_factor = 20.0f;
       F32 target_paddle_pos = (F32)input->paddle_control*(ARENA_WIDTH-game_state->paddle.dim.x);
@@ -417,6 +418,59 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         for(int i = 0; i < hit_brick_count; i++)
           edges |= hit_brick_edges[i];
         reflect_ball(edges, &game_state->ball, &game_state->ball_direction);
+      }
+
+      // NOTE(leo): Reflect off walls
+      if(hit_walls) {
+        reflect_ball(hit_wall_edges, &game_state->ball, &game_state->ball_direction);
+      }
+
+      // NOTE(leo): "Reflect" off paddle
+      if(hit_paddle) {
+        if(hit_paddle_edges & EDGE_TOP) {
+          V2 left = game_state->ball.pos;
+          V2 right = v2_add(game_state->ball.pos, (V2) { game_state->ball.dim.x, 0.0f });
+          if(left.x < game_state->paddle.pos.x)
+            left.x = game_state->paddle.pos.x;
+          if(right.x > game_state->paddle.pos.x + game_state->paddle.dim.x)
+            right.x = game_state->paddle.pos.x + game_state->paddle.dim.x;
+          V2 mid = v2_add(v2_smul(0.5f, left), v2_smul(0.5f, right));
+          F32 hit_normalized = (mid.x - game_state->paddle.pos.x)/game_state->paddle.dim.x;
+          // NOTE(leo): 0: -45 degs, 1: 45 degs, in between: lerp. Relative to paddle normal
+          F32 PI = 3.14159f;
+          F32 angle = hit_normalized*(PI/2.0f - PI/4.0f) + (1.0f - hit_normalized)*(PI/2.0f + PI/4.0f);
+          game_state->ball_direction.x = cosf(angle);
+          game_state->ball_direction.y = sinf(angle);
+        }
+        else if(hit_paddle_edges & EDGE_LEFT || hit_paddle_edges & EDGE_RIGHT) {
+          /*
+            Elastic collision:
+              m1 = 1, m2 = inf
+              s1 = ball_speed_x, s2 = paddle_speed
+              u1 = ball_speed_x - paddle_speed, u2 = 0
+              v1 = (m1-m2)/(m1+m2)*u1 + (2*m2)/(m1+m2)*u2 = -1*(ball_speed_x - paddle_speed)
+              v2 = (2*m1)/(m1+m2)*u1 + (m2-m1)/(m1+m2)*u2 = 0
+              v1 = -ball_speed_x + paddle_speed
+              v2 = 0
+              w1 = -ball_speed_x + 2*paddle_speed
+              w2 = paddle_speed
+          */
+          V2 w1 = { -game_state->ball_speed*game_state->ball_direction.x + 2*paddle_speed, game_state->ball_speed*game_state->ball_direction.y };
+          game_state->ball_speed = sqrtf(w1.x*w1.x + w1.y*w1.y);
+          game_state->ball_direction = v2_smul(1.0f/game_state->ball_speed, w1);
+          if(hit_paddle_edges & EDGE_LEFT)
+            game_state->ball.pos.x += -0.001f;
+          else
+            game_state->ball.pos.x += 0.001f;
+        }
+        else {
+          reflect_ball(hit_paddle_edges, &game_state->ball, &game_state->ball_direction);
+        }
+      }
+
+
+      // NOTE(leo): Hit bricks gameplay logic
+      if(hit_bricks && game_state->state == GAME_STATE_PLAYING) {
         game_state->hit_count += hit_brick_count;
 
         // NOTE(leo): Attribute score for hitting brick; Max ball speed if orange or red brick
@@ -459,9 +513,8 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         }
       }
 
-      // NOTE(leo): Reflect off walls
-      if(hit_walls) {
-        reflect_ball(hit_wall_edges, &game_state->ball, &game_state->ball_direction);
+      // NOTE(leo): Hit walls gameplay logic
+      if(hit_walls && game_state->state == GAME_STATE_PLAYING) {
         if((hit_wall_edges & EDGE_LEFT) || (hit_wall_edges & EDGE_RIGHT))
           game_state->hit_count++;
         if((hit_wall_edges & EDGE_BOTTOM) || (hit_wall_edges & EDGE_TOP))
@@ -485,49 +538,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         }
       }
 
-      // NOTE(leo): Interact with paddle
-      if(hit_paddle) {
+      // NOTE(leo): Hit paddle gameplay logic
+      if(hit_paddle && game_state->state == GAME_STATE_PLAYING) {
         game_state->hit_count++;
-        if(hit_paddle_edges & EDGE_TOP) {
-          V2 left = game_state->ball.pos;
-          V2 right = v2_add(game_state->ball.pos, (V2) { game_state->ball.dim.x, 0.0f });
-          if(left.x < game_state->paddle.pos.x)
-            left.x = game_state->paddle.pos.x;
-          if(right.x > game_state->paddle.pos.x + game_state->paddle.dim.x)
-            right.x = game_state->paddle.pos.x + game_state->paddle.dim.x;
-          V2 mid = v2_add(v2_smul(0.5f, left), v2_smul(0.5f, right));
-          F32 hit_normalized = (mid.x - game_state->paddle.pos.x)/game_state->paddle.dim.x;
-          // NOTE(leo): 0: -45 degs, 1: 45 degs, in between: lerp. Relative to paddle normal
-          F32 PI = 3.14159f;
-          F32 angle = hit_normalized*(PI/2.0f - PI/4.0f) + (1.0f - hit_normalized)*(PI/2.0f + PI/4.0f);
-          game_state->ball_direction.x = cosf(angle);
-          game_state->ball_direction.y = sinf(angle);
-        }
-        else if(hit_paddle_edges & EDGE_LEFT || hit_paddle_edges & EDGE_RIGHT) {
-          /*
-            Elastic collision:
-              m1 = 1, m2 = inf
-              s1 = ball_speed_x, s2 = paddle_speed
-              u1 = ball_speed_x - paddle_speed, u2 = 0
-              v1 = (m1-m2)/(m1+m2)*u1 + (2*m2)/(m1+m2)*u2 = -1*(ball_speed_x - paddle_speed)
-              v2 = (2*m1)/(m1+m2)*u1 + (m2-m1)/(m1+m2)*u2 = 0
-              v1 = -ball_speed_x + paddle_speed
-              v2 = 0
-              w1 = -ball_speed_x + 2*paddle_speed
-              w2 = paddle_speed
-          */
-          V2 w1 = { -game_state->ball_speed*game_state->ball_direction.x + 2*paddle_speed, game_state->ball_speed*game_state->ball_direction.y };
-          game_state->ball_speed = sqrtf(w1.x*w1.x + w1.y*w1.y);
-          game_state->ball_direction = v2_smul(1.0f/game_state->ball_speed, w1);
-          if(hit_paddle_edges & EDGE_LEFT)
-            game_state->ball.pos.x += -0.001f;
-          else
-            game_state->ball.pos.x += 0.001f;
-        }
-        else {
-          reflect_ball(hit_paddle_edges, &game_state->ball, &game_state->ball_direction);
-        }
       }
+
 
       // TODO(leo): Prevent paddle from pushing ball into wall
 
@@ -538,7 +553,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         game_state->target_ball_speed = BALL_SPEED_3;
 
       elapsed += step;
-      assert(iterations < 25);
+      if(iterations > 25) {
+        // TODO(leo): Proper time step (why not dt to previous frame?)
+        assert(false);
+        break;
+      }
     }
   }
 
