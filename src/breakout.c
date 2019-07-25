@@ -204,6 +204,7 @@ void game_serve(GameState *game_state)
   game_state->paddle.dim.x = PADDLE_WIDTH;
 
   game_state->hit_count = 0;
+  game_state->balls_remaining--;
 }
 
 void change_paddle_width(GameState *game_state, F32 new_width)
@@ -527,7 +528,6 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
 
         // NOTE(leo): Round over
         if(hit_wall_edges & EDGE_TOP) {
-          game_state->balls_remaining--;
           if(game_state->balls_remaining)
             game_state->state = GAME_STATE_BALL_LOST;
           else
@@ -595,10 +595,19 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     buffer[1] = (game_state->score / 10) % 10 + '0';
     buffer[2] = (game_state->score / 1) % 10 + '0';
     buffer[3] = 0;
-    V2 cursor = v2_add(playing_area.pos, playing_area.dim);
-    cursor.x -= (5*SYMBOL_WIDTH + 2*SYMBOL_SPACING)*scale;
-    cursor.y -= (3*SYMBOL_WIDTH + 2*SYMBOL_SPACING)*scale;
-    draw_text(buffer, cursor, scale, 1.0f, 1.0f, 1.0f, image);
+    V2 cursor = v2_add(arena_offset, v2_smul(scale, (V2) { ARENA_WIDTH/2.0f + ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f }));
+    draw_text_centered(buffer, cursor, scale, 1.0f, 1.0f, 1.0f, &playing_area_image);
+  }
+
+  // NOTE(leo): Draw ball count
+  {
+    char buffer[4];
+    buffer[0] = (game_state->balls_remaining / 100) % 10 + '0';
+    buffer[1] = (game_state->balls_remaining / 10) % 10 + '0';
+    buffer[2] = (game_state->balls_remaining / 1) % 10 + '0';
+    buffer[3] = 0;
+    V2 cursor = v2_add(arena_offset, v2_smul(scale, (V2) { ARENA_WIDTH/2.0f - ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f }));
+    draw_text_centered(buffer, cursor, scale, 1.0f, 1.0f, 1.0f, &playing_area_image);
   }
 }
 
