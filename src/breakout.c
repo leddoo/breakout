@@ -183,7 +183,7 @@ void game_start(GameState *game_state)
 
   reset_ball(game_state);
 
-  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f);
+  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width);
   game_state->paddle.dim.x = game_state->initial_paddle_width;
 
   spawn_bricks(game_state);
@@ -200,7 +200,7 @@ void game_serve(GameState *game_state)
 
   reset_ball(game_state);
 
-  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f);
+  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width);
   game_state->paddle.dim.x = game_state->initial_paddle_width;
 
   game_state->hit_count = 0;
@@ -226,7 +226,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     // NOTE(leo): Paddle
     game_state->initial_paddle_width = PADDLE_WIDTH;
     game_state->paddle = (Rect){
-      .pos = { INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f), PADDLE_Y },
+      .pos = { INITIAL_PADDLE_POS(game_state->initial_paddle_width), PADDLE_Y },
       .dim = { game_state->initial_paddle_width, PADDLE_HEIGTH }
     };
 
@@ -254,7 +254,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       change_paddle_width(game_state, game_state->paddle.dim.x + dw);
     }
     // NOTE(leo): Position
-    F32 target_paddle_pos = INITIAL_PADDLE_POS(game_state->initial_paddle_width/2.0f);
+    F32 target_paddle_pos = INITIAL_PADDLE_POS(game_state->paddle.dim.x);
     {
       F32 paddle_speed_factor = 20.0f;
       F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
