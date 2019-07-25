@@ -177,7 +177,10 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     text_count = PAUSE_COUNT;
   }
   else if(game_state->state == GAME_STATE_GAME_OVER) {
-    header = "GAME OVER";
+    if(game_state->bricks_remaining == 0 && game_state->has_cleared_bricks == true)
+      header = "YOU WIN";
+    else
+      header = "GAME OVER";
     texts[0] = "RESTART";
     texts[1] = "QUIT";
     if(win32_game_state->selected == GAME_OVER_RESTART)
