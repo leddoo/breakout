@@ -10,7 +10,7 @@
 #define BRICK_DELTA_X 1.0f
 #define BRICK_DELTA_Y 0.8f
 
-#define PADDLE_WIDTH 7.0f
+#define PADDLE_WIDTH(difficulty_factor) (7.0f/difficulty_factor)
 #define PADDLE_HEIGTH 3.0f
 #define PADDLE_Y 6.0f
 
@@ -90,11 +90,12 @@ typedef struct GameState {
   F32 target_ball_speed;
 
   Rect paddle;
-  F32 initial_paddle_width;
+  bool is_paddle_shrunk;
 
   Brick bricks[BRICK_COUNT_X*BRICK_COUNT_Y];
   int bricks_remaining;
 
+  F32 difficulty_factor;
   int score;
   int hit_count;
   int balls_remaining;

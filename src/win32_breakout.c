@@ -88,11 +88,11 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     }
     else if(game_state->state == GAME_STATE_DIFFICULTY_SELECT) {
       game_start(game_state);
-      game_state->initial_paddle_width = PADDLE_WIDTH;
+      game_state->difficulty_factor = 1.0f;
       if(win32_game_state->selected == DIFFICULTY_EASY)
-        game_state->initial_paddle_width *= 2.0f;
+        game_state->difficulty_factor = 0.5f;
       else if(win32_game_state->selected == DIFFICULTY_HARD)
-        game_state->initial_paddle_width *= 0.5f;
+        game_state->difficulty_factor = 2.0f;
       game_state->state = GAME_STATE_RESET_PADDLE;
     }
     else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_RESTART)

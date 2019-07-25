@@ -183,8 +183,9 @@ void game_start(GameState *game_state)
 
   reset_ball(game_state);
 
-  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width);
-  game_state->paddle.dim.x = game_state->initial_paddle_width;
+  game_state->paddle.pos.x = INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor));
+  game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
+  game_state->is_paddle_shrunk = false;
 
   spawn_bricks(game_state);
 
@@ -200,8 +201,9 @@ void game_serve(GameState *game_state)
 
   reset_ball(game_state);
 
-  game_state->paddle.pos.x = INITIAL_PADDLE_POS(game_state->initial_paddle_width);
-  game_state->paddle.dim.x = game_state->initial_paddle_width;
+  game_state->paddle.pos.x = INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor));
+  game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
+  game_state->is_paddle_shrunk = false;
 
   game_state->hit_count = 0;
   game_state->balls_remaining--;
@@ -219,16 +221,18 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
   // NOTE(leo): initialization
   if(game_state->state == GAME_STATE_UNINITIALIZED)
   {
-    game_state->state = GAME_STATE_MAIN_MENU;
-
     srand(time(0));
 
+    game_state->state = GAME_STATE_MAIN_MENU;
+
+    game_state->difficulty_factor = 1.0f;
+
     // NOTE(leo): Paddle
-    game_state->initial_paddle_width = PADDLE_WIDTH;
     game_state->paddle = (Rect){
-      .pos = { INITIAL_PADDLE_POS(game_state->initial_paddle_width), PADDLE_Y },
-      .dim = { game_state->initial_paddle_width, PADDLE_HEIGTH }
+      .pos = { INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor)), PADDLE_Y },
+      .dim = { PADDLE_WIDTH(game_state->difficulty_factor), PADDLE_HEIGTH }
     };
+    game_state->is_paddle_shrunk = false;
 
     // NOTE(leo): Ball
     game_state->ball = (Rect){
@@ -245,7 +249,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
   // NOTE(leo): Animate paddle back
   if(game_state->state == GAME_STATE_RESET_PADDLE) {
     // NOTE(leo): Width
-    F32 target_paddle_width = game_state->initial_paddle_width;
+    F32 target_paddle_width = PADDLE_WIDTH(game_state->difficulty_factor);
     {
       F32 add_width = target_paddle_width - game_state->paddle.dim.x;
       F32 dw = 20.0f*add_width*dt;
@@ -267,8 +271,8 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       && fabsf(target_paddle_width - game_state->paddle.dim.x) < 0.001f) {
       game_state->state = GAME_STATE_WAIT_SERVE;
       reset_ball(game_state);
-      game_state->paddle.pos.x = target_paddle_pos;
-      game_state->paddle.dim.x = game_state->initial_paddle_width;
+      game_state->paddle.pos.x = INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor));
+      game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
     }
   }
 
@@ -479,18 +483,18 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         for(int i = 0; i < hit_brick_count; i++) {
           Brick *brick = &game_state->bricks[hit_brick_indices[i]];
           if(brick->type == 0) {
-            game_state->score += 1;
+            game_state->score += roundf(1 * game_state->difficulty_factor);
           }
           else if(brick->type == 1) {
-            game_state->score += 3;
+            game_state->score += roundf(3 * game_state->difficulty_factor);
           }
           else if(brick->type == 2) {
-            game_state->score += 5;
+            game_state->score += roundf(5 * game_state->difficulty_factor);
             if(game_state->target_ball_speed < BALL_SPEED_4)
               game_state->target_ball_speed = BALL_SPEED_4;
           }
           else if(brick->type == 3) {
-            game_state->score += 7;
+            game_state->score += roundf(7 * game_state->difficulty_factor);
             if(game_state->target_ball_speed < BALL_SPEED_4)
               game_state->target_ball_speed = BALL_SPEED_4;
           }
@@ -523,8 +527,9 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
           game_state->hit_count++;
 
         // NOTE(leo): Paddle shrinking
-        if(hit_wall_edges & EDGE_BOTTOM && game_state->paddle.dim.x == game_state->initial_paddle_width) {
-          change_paddle_width(game_state, game_state->initial_paddle_width/2.0f);
+        if(hit_wall_edges & EDGE_BOTTOM && !game_state->is_paddle_shrunk) {
+          game_state->is_paddle_shrunk = true;
+          change_paddle_width(game_state, game_state->paddle.dim.x/2.0f);
         }
 
         // NOTE(leo): Round over
