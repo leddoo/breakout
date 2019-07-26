@@ -590,6 +590,10 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
           else {
             switch_to_reset_game(game_state, false, false);
             game_state->has_cleared_bricks = true;
+            // TODO(leo): Is this confusing the player? Could think: Why do
+            // they take a ball from me when I serve after I have cleared the
+            // first set of bricks?
+            game_state->balls_remaining++;
           }
           elapsed = dt;
           break;
