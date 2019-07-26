@@ -236,6 +236,16 @@ U32 compute_brick_type(int brick_index)
   return result;
 }
 
+void compute_brick_alphas(GameState *game_state)
+{
+  for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
+    if(game_state->is_brick_broken[brick_index])
+      game_state->brick_alpha[brick_index] = ((F32)rand() / RAND_MAX) * 0.5f;
+    else
+      game_state->brick_alpha[brick_index] = 1.0f;
+  }
+}
+
 void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
 {
   // NOTE(leo): initialization
@@ -294,6 +304,50 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       game_state->paddle.pos.x = INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor));
       game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
     }
+  }
+  // NOTE(leo): Fade blocks, morph paddle back
+  else if(game_state->state == GAME_STATE_RESET_GAME) {
+    F32 alpha_speed = 6.0f;
+    F32 offset = 0.2f;
+    int finished_brick_count = 0;
+    for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
+      F32 alpha = game_state->brick_alpha[brick_index];
+      alpha += (1.0f - alpha + offset) * alpha_speed * dt;
+      if(alpha >= 1.0f - 0.001f) {
+        finished_brick_count++;
+        alpha = 1.0f;
+      }
+      game_state->brick_alpha[brick_index] = alpha;
+    }
+
+    // NOTE(leo): Width
+    bool is_paddle_width_finished = false;
+    {
+      F32 target_paddle_width = PADDLE_WIDTH(game_state->difficulty_factor);
+      F32 add_width = target_paddle_width - game_state->paddle.dim.x;
+      F32 dw = 20.0f*add_width*dt;
+      if(fabsf(dw) > fabsf(add_width))
+        dw = add_width;
+      change_paddle_width(game_state, game_state->paddle.dim.x + dw);
+      if(fabsf(target_paddle_width - game_state->paddle.dim.x) < 0.001f)
+        is_paddle_width_finished = true;
+    }
+    // NOTE(leo): Position
+    bool is_paddle_position_finished = false;
+    {
+      F32 target_paddle_pos = INITIAL_PADDLE_POS(game_state->paddle.dim.x);
+      F32 paddle_speed_factor = 20.0f;
+      F32 add_pos = target_paddle_pos - game_state->paddle.pos.x;
+      F32 dx = paddle_speed_factor*add_pos*dt;
+      if(fabsf(dx) > fabsf(add_pos))
+        dx = add_pos;
+      game_state->paddle.pos.x += dx;
+      if(fabsf(target_paddle_pos - game_state->paddle.pos.x) < 0.001f)
+        is_paddle_position_finished = true;
+    }
+
+    if(finished_brick_count == BRICK_COUNT && is_paddle_width_finished && is_paddle_position_finished)
+      game_state->state = GAME_STATE_MAIN_MENU;
   }
 
 
@@ -610,6 +664,8 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     if(game_state->is_brick_broken[brick_index])
       continue;
     Color color = brick_colors[compute_brick_type(brick_index)];
+    if(game_state->state == GAME_STATE_RESET_GAME)
+      color.a = game_state->brick_alpha[brick_index];
     Rect brick_rect = compute_brick_rect(brick_index);
     draw_rectangle(v2_add(arena_offset, v2_smul(scale, brick_rect.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(brick_rect.pos, brick_rect.dim))), color, &playing_area_image);
   }

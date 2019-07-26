@@ -122,9 +122,11 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_MAIN_MENU)
       || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_MAIN_MENU))
     {
+      compute_brick_alphas(game_state);
+      reset_bricks(game_state);
+      game_state->ball_alpha = 0.0f;
       game_state->difficulty_factor = 1.0f;
-      game_start(game_state);
-      game_state->state = GAME_STATE_MAIN_MENU;
+      game_state->state = GAME_STATE_RESET_GAME;
     }
 
     if(game_state->state != GAME_STATE_DIFFICULTY_SELECT)

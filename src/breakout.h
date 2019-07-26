@@ -91,6 +91,8 @@ typedef struct GameState {
   int hit_count;
   int balls_remaining;
   bool has_cleared_bricks;
+
+  F32 brick_alpha[BRICK_COUNT];
 } GameState;
 
 typedef struct Input {
@@ -115,6 +117,9 @@ typedef struct Color {
 
 void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, Image *image);
 void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Image *image);
+
+void compute_brick_alphas(GameState *game_state);
+void reset_bricks(GameState *game_state);
 
 #define SYMBOL_WIDTH 5
 #define SYMBOL_HEIGHT 7
