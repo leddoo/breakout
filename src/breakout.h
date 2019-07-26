@@ -54,27 +54,29 @@ enum {
 };
 
 /*
+  Transitions: (k) Key, (b) Menu button, (a) Automatic (eg: Gameplay event or animation finished)
+
+
+                  a            b
     uninitialized -> main_menu -> difficulty_select
-                         ^               |
-                         |               V
-                         |           wait_serve -> playing <------------------.
-                         |               ^            |                       |
-                         |               |      .-----'-------.---------.     |
-                         |               |      |             |         |     |
-                         |               |      V             V         V     |
-                         |               |- reset_paddle  game_over   paused -'
-                         |               |                    |         |
-                         |               |                    '---.-----'---.
-                         |               |                        |         |
-                         |               |                        V         |
-                         |               '------------------- reset_game    |
-                         |                                                 |
-                         '-------------------------------------------------'
+                         ^              b|
+                        a|               V     a             b
+                         '--------- reset_game -> wait_serve -> playing <------------------.
+                                         |            ^            |                       |
+                                         |           a|      .-----'-------.---------.     |
+                                         |            |     a|            a|        k|     |
+                                         |            |      V             V         V     |k/b
+                                         |            '- reset_paddle  game_over   paused -'
+                                         |                                b|        b|
+                                         '---------------------------------'---------'
+
+    NOTE(leo): reset_game goes to main menu if game_state->is_switching_to_main_menu is true
 */
 
 typedef struct GameState {
   int state;
 
+  // NOTE(leo): "Objects"
   Rect ball;
   V2 ball_direction;
   F32 ball_speed;
@@ -86,13 +88,16 @@ typedef struct GameState {
   bool is_brick_broken[BRICK_COUNT];
   int bricks_remaining;
 
+  // NOTE(leo): Gameplay
   F32 difficulty_factor;
   int score;
   int hit_count;
   int balls_remaining;
   bool has_cleared_bricks;
 
+  // NOTE(leo): Animation
   F32 brick_alpha[BRICK_COUNT];
+  bool is_switching_to_main_menu;
 } GameState;
 
 typedef struct Input {
@@ -118,8 +123,7 @@ typedef struct Color {
 void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, Image *image);
 void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Image *image);
 
-void compute_brick_alphas(GameState *game_state);
-void reset_bricks(GameState *game_state);
+void switch_to_reset_game(GameState *game_state, F32 difficulty_factor, bool then_switch_to_main_menu);
 
 #define SYMBOL_WIDTH 5
 #define SYMBOL_HEIGHT 7

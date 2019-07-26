@@ -77,31 +77,26 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
   }
 
   // NOTE(leo): Handle input
-  Input game_input = { .paddle_control = -1.0f };
-
-  bool interact = button_just_pressed(input->key_return) || button_just_pressed(input->key_space);
-
-  if(interact) {
-    if((game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_PLAY)) {
+  if(button_just_pressed(input->key_return) || button_just_pressed(input->key_space)) {
+    if(game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_QUIT) {
+      return false;
+    }
+    else if((game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_PLAY)) {
       game_state->state = GAME_STATE_DIFFICULTY_SELECT;
       win32_game_state->selected = DIFFICULTY_NORMAL;
     }
     else if(game_state->state == GAME_STATE_DIFFICULTY_SELECT) {
-      game_start(game_state);
-      game_state->difficulty_factor = 1.0f;
       if(win32_game_state->selected == DIFFICULTY_EASY)
-        game_state->difficulty_factor = 0.5f;
+        switch_to_reset_game(game_state, 0.5f, false);
       else if(win32_game_state->selected == DIFFICULTY_HARD)
-        game_state->difficulty_factor = 2.0f;
-      game_state->state = GAME_STATE_RESET_PADDLE;
+        switch_to_reset_game(game_state, 2.0f, false);
+      else
+        switch_to_reset_game(game_state, 1.0f, false);
     }
     else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_RESTART)
       || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_RESTART))
     {
-      game_start(game_state);
-    }
-    else if(game_state->state == GAME_STATE_MAIN_MENU && win32_game_state->selected == MAIN_QUIT) {
-      return false;
+      switch_to_reset_game(game_state, game_state->difficulty_factor, false);
     }
     else if(game_state->state == GAME_STATE_WAIT_SERVE && win32_game_state->selected == WAIT_SERVE_SERVE) {
       game_serve(game_state);
@@ -122,11 +117,7 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_MAIN_MENU)
       || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_MAIN_MENU))
     {
-      compute_brick_alphas(game_state);
-      reset_bricks(game_state);
-      game_state->ball_alpha = 0.0f;
-      game_state->difficulty_factor = 1.0f;
-      game_state->state = GAME_STATE_RESET_GAME;
+      switch_to_reset_game(game_state, 1.0f, true);
     }
 
     if(game_state->state != GAME_STATE_DIFFICULTY_SELECT)
@@ -147,10 +138,6 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     }
   }
 
-  if(game_state->state == GAME_STATE_PLAYING) {
-    game_input.paddle_control = (input->mouse.x - paddle_motion_rect.pos.x) / paddle_motion_rect.dim.x;
-  }
-
   int menu_entry_count = 0;
   if(game_state->state == GAME_STATE_MAIN_MENU)
     menu_entry_count = MAIN_COUNT;
@@ -167,6 +154,11 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     win32_game_state->selected = (win32_game_state->selected - 1 + menu_entry_count) % menu_entry_count;
   if(menu_entry_count && button_just_pressed(input->key_down))
     win32_game_state->selected = (win32_game_state->selected + 1) % menu_entry_count;
+
+  Input game_input = { .paddle_control = -1.0f };
+  if(game_state->state == GAME_STATE_PLAYING) {
+    game_input.paddle_control = (input->mouse.x - paddle_motion_rect.pos.x) / paddle_motion_rect.dim.x;
+  }
 
   game_update(&win32_game_state->game_state, dt, &game_input, game_image, playing_area);
 

@@ -177,22 +177,10 @@ void reset_ball(GameState *game_state)
   game_state->target_ball_speed = BALL_SPEED_1;
 }
 
-void game_start(GameState *game_state)
+void reset_paddle(GameState *game_state)
 {
-  game_state->state = GAME_STATE_WAIT_SERVE;
-
-  reset_ball(game_state);
-
   game_state->paddle.pos.x = INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor));
   game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
-  game_state->is_paddle_shrunk = false;
-
-  reset_bricks(game_state);
-
-  game_state->hit_count = 0;
-  game_state->score = 0;
-  game_state->balls_remaining = 3;
-  game_state->has_cleared_bricks = false;
 }
 
 void game_serve(GameState *game_state)
@@ -236,7 +224,7 @@ U32 compute_brick_type(int brick_index)
   return result;
 }
 
-void compute_brick_alphas(GameState *game_state)
+void switch_to_reset_game(GameState *game_state, F32 difficulty_factor, bool then_switch_to_main_menu)
 {
   for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
     if(game_state->is_brick_broken[brick_index])
@@ -244,6 +232,11 @@ void compute_brick_alphas(GameState *game_state)
     else
       game_state->brick_alpha[brick_index] = 1.0f;
   }
+  reset_bricks(game_state);
+
+  game_state->is_switching_to_main_menu = then_switch_to_main_menu;
+  game_state->difficulty_factor = difficulty_factor;
+  game_state->state = GAME_STATE_RESET_GAME;
 }
 
 void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
@@ -299,10 +292,9 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     }
     if(fabsf(target_paddle_pos - game_state->paddle.pos.x) < 0.001f
       && fabsf(target_paddle_width - game_state->paddle.dim.x) < 0.001f) {
-      game_state->state = GAME_STATE_WAIT_SERVE;
       reset_ball(game_state);
-      game_state->paddle.pos.x = INITIAL_PADDLE_POS(PADDLE_WIDTH(game_state->difficulty_factor));
-      game_state->paddle.dim.x = PADDLE_WIDTH(game_state->difficulty_factor);
+      reset_paddle(game_state);
+      game_state->state = GAME_STATE_WAIT_SERVE;
     }
   }
   // NOTE(leo): Fade blocks, morph paddle back
@@ -346,8 +338,19 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
         is_paddle_position_finished = true;
     }
 
-    if(finished_brick_count == BRICK_COUNT && is_paddle_width_finished && is_paddle_position_finished)
-      game_state->state = GAME_STATE_MAIN_MENU;
+    if(finished_brick_count == BRICK_COUNT && is_paddle_width_finished && is_paddle_position_finished) {
+      if(game_state->is_switching_to_main_menu)
+        game_state->state = GAME_STATE_MAIN_MENU;
+      else
+        game_state->state = GAME_STATE_WAIT_SERVE;
+      reset_ball(game_state);
+      reset_paddle(game_state);
+
+      game_state->hit_count = 0;
+      game_state->score = 0;
+      game_state->balls_remaining = 3;
+      game_state->has_cleared_bricks = false;
+    }
   }
 
 
@@ -674,8 +677,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
   draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->paddle.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->paddle.pos, game_state->paddle.dim))), PADDLE_COLOR, &playing_area_image);
 
   // NOTE(leo): Draw ball
-  if((game_state->state != GAME_STATE_MAIN_MENU) && (game_state->state != GAME_STATE_DIFFICULTY_SELECT) && (game_state->state != GAME_STATE_RESET_PADDLE))
+  if((game_state->state == GAME_STATE_WAIT_SERVE) || (game_state->state == GAME_STATE_PLAYING)
+    || (game_state->state == GAME_STATE_GAME_OVER) || (game_state->state == GAME_STATE_PAUSE))
+  {
     draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->ball.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->ball.pos, game_state->ball.dim))), BALL_COLOR, &playing_area_image);
+  }
 
   // NOTE(leo): Draw score
   {
