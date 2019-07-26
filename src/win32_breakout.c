@@ -86,17 +86,17 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
       win32_game_state->selected = DIFFICULTY_NORMAL;
     }
     else if(game_state->state == GAME_STATE_DIFFICULTY_SELECT) {
+      game_state->difficulty_factor = 1.0f;
       if(win32_game_state->selected == DIFFICULTY_EASY)
-        switch_to_reset_game(game_state, 0.5f, false);
+        game_state->difficulty_factor = 0.5f;
       else if(win32_game_state->selected == DIFFICULTY_HARD)
-        switch_to_reset_game(game_state, 2.0f, false);
-      else
-        switch_to_reset_game(game_state, 1.0f, false);
+        game_state->difficulty_factor = 2.0f;
+      switch_to_reset_game(game_state, false, true);
     }
     else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_RESTART)
       || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_RESTART))
     {
-      switch_to_reset_game(game_state, game_state->difficulty_factor, false);
+      switch_to_reset_game(game_state, false, true);
     }
     else if(game_state->state == GAME_STATE_WAIT_SERVE && win32_game_state->selected == WAIT_SERVE_SERVE) {
       game_serve(game_state);
@@ -117,7 +117,8 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     else if((game_state->state == GAME_STATE_PAUSE && win32_game_state->selected == PAUSE_MAIN_MENU)
       || (game_state->state == GAME_STATE_GAME_OVER && win32_game_state->selected == GAME_OVER_MAIN_MENU))
     {
-      switch_to_reset_game(game_state, 1.0f, true);
+      game_state->difficulty_factor = 1.0f;
+      switch_to_reset_game(game_state, true, true);
     }
 
     if(game_state->state != GAME_STATE_DIFFICULTY_SELECT)

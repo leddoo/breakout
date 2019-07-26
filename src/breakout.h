@@ -61,14 +61,14 @@ enum {
     uninitialized -> main_menu -> difficulty_select
                          ^              b|
                         a|               V     a             b
-                         '--------- reset_game -> wait_serve -> playing <------------------.
-                                         |            ^            |                       |
-                                         |           a|      .-----'-------.---------.     |
-                                         |            |     a|            a|        k|     |
-                                         |            |      V             V         V     |k/b
-                                         |            '- reset_paddle  game_over   paused -'
-                                         |                                b|        b|
-                                         '---------------------------------'---------'
+                         '--------- reset_game -> wait_serve -> playing <---------------------.
+                                         |            ^            |                          |
+                                         |           a|      .-----'---.------.---------.     |
+                                         |            |     a|        a|     a|        k|     |
+                                         |            |      V         |      V         V     |k/b
+                                         |            '- reset_paddle  |  game_over   paused -'
+                                         |                             |     b|        b|
+                                         '-----------------------------'------'---------'
 
     NOTE(leo): reset_game goes to main menu if game_state->is_switching_to_main_menu is true
 */
@@ -98,6 +98,7 @@ typedef struct GameState {
   // NOTE(leo): Animation
   F32 brick_alpha[BRICK_COUNT];
   bool is_switching_to_main_menu;
+  bool is_erasing_score;
 } GameState;
 
 typedef struct Input {
@@ -106,7 +107,6 @@ typedef struct Input {
 
 void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area);
 
-void game_start(GameState *game_state);
 void game_serve(GameState *game_state);
 
 Rect compute_playing_area(V2 image_size);
@@ -123,7 +123,7 @@ typedef struct Color {
 void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, Image *image);
 void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Image *image);
 
-void switch_to_reset_game(GameState *game_state, F32 difficulty_factor, bool then_switch_to_main_menu);
+void switch_to_reset_game(GameState *game_state, bool then_switch_to_main_menu, bool erase_score);
 
 #define SYMBOL_WIDTH 5
 #define SYMBOL_HEIGHT 7

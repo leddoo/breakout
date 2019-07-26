@@ -224,7 +224,7 @@ U32 compute_brick_type(int brick_index)
   return result;
 }
 
-void switch_to_reset_game(GameState *game_state, F32 difficulty_factor, bool then_switch_to_main_menu)
+void switch_to_reset_game(GameState *game_state, bool then_switch_to_main_menu, bool erase_score)
 {
   for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
     if(game_state->is_brick_broken[brick_index])
@@ -234,8 +234,8 @@ void switch_to_reset_game(GameState *game_state, F32 difficulty_factor, bool the
   }
   reset_bricks(game_state);
 
+  game_state->is_erasing_score = erase_score;
   game_state->is_switching_to_main_menu = then_switch_to_main_menu;
-  game_state->difficulty_factor = difficulty_factor;
   game_state->state = GAME_STATE_RESET_GAME;
 }
 
@@ -300,7 +300,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
   // NOTE(leo): Fade blocks, morph paddle back
   else if(game_state->state == GAME_STATE_RESET_GAME) {
     F32 alpha_speed = 6.0f;
-    F32 offset = 0.2f;
+    F32 offset = 0.1f;
     int finished_brick_count = 0;
     for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
       F32 alpha = game_state->brick_alpha[brick_index];
@@ -346,10 +346,11 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       reset_ball(game_state);
       reset_paddle(game_state);
 
-      game_state->hit_count = 0;
-      game_state->score = 0;
-      game_state->balls_remaining = 3;
-      game_state->has_cleared_bricks = false;
+      if(game_state->is_erasing_score) {
+        game_state->score = 0;
+        game_state->balls_remaining = 3;
+        game_state->has_cleared_bricks = false;
+      }
     }
   }
 
@@ -557,6 +558,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
       // NOTE(leo): Hit bricks gameplay logic
       if(hit_bricks && game_state->state == GAME_STATE_PLAYING) {
         game_state->hit_count += hit_brick_count;
+        game_state->bricks_remaining -= hit_brick_count;
 
         // NOTE(leo): Attribute score for hitting brick; Max ball speed if orange or red brick
         for(int i = 0; i < hit_brick_count; i++) {
@@ -586,8 +588,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
             game_state->state = GAME_STATE_GAME_OVER;
           }
           else {
-            reset_bricks(game_state);
-            game_state->state = GAME_STATE_RESET_PADDLE;
+            switch_to_reset_game(game_state, false, false);
             game_state->has_cleared_bricks = true;
           }
           elapsed = dt;
