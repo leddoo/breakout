@@ -3,6 +3,8 @@
 
 #include <windows.h>
 
+#include <gl/GL.h>
+
 typedef struct Win32Image {
   BITMAPINFO info;
   U32 *memory;
@@ -88,26 +90,42 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
         win32_on_lose_focus(&global_game_memory);
       result = DefWindowProcA(window, message, w_param, l_param);
     } break;
-    case WM_PAINT: {
-      PAINTSTRUCT paint;
-      HDC dc = BeginPaint(window, &paint);
-      int ret = StretchDIBits(
-        dc,
-        0, 0, global_image.width, global_image.height,
-        0, 0, global_image.width, global_image.height,
-        global_image.memory,
-        &global_image.info,
-        DIB_RGB_COLORS,
-        SRCCOPY
-      );
-      assert(ret);
-      EndPaint(window, &paint);
-    } break;
     default: {
       result = DefWindowProcA(window, message, w_param, l_param);
     }
   }
   return result;
+}
+
+void win32_opengl_init(HWND window)
+{
+  HDC dc = GetDC(window);
+  PIXELFORMATDESCRIPTOR pfd = {
+    .nSize = sizeof(pfd),
+    .nVersion = 1,
+    .dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+    .iPixelType = PFD_TYPE_RGBA,
+    .cColorBits = 32,
+    .cRedShift = 16,
+    .cGreenShift = 8,
+    .cBlueShift = 0,
+    .cAlphaShift = 24,
+  };
+  int pixel_format = ChoosePixelFormat(dc, &pfd);
+  assert(pixel_format);
+
+  BOOL ret = SetPixelFormat(dc, pixel_format, &pfd);
+  assert(ret == TRUE);
+
+  HGLRC glrc = wglCreateContext(dc);
+  assert(glrc);
+
+  ret = wglMakeCurrent(dc, glrc);
+  assert(ret == TRUE);
+
+  GLuint texture;
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
 }
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, int cmd_show)
@@ -139,23 +157,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     );
   }
 
+  win32_opengl_init(main_window);
+
   LARGE_INTEGER last_time = { 0 };
   LARGE_INTEGER timer_frequency = { 0 };
   F32 dt = 0.0f;
   F32 target_dt = 1.0f/60.0f;
   QueryPerformanceCounter(&last_time);
   QueryPerformanceFrequency(&timer_frequency);
-
-  // NOTE(leo): Set scheduler granularity to minimum
-  UINT scheduler_granularity;
-  {
-    TIMECAPS time_caps;
-    MMRESULT ret = timeGetDevCaps(&time_caps, sizeof(time_caps));
-    assert(ret==MMSYSERR_NOERROR);
-    scheduler_granularity = time_caps.wPeriodMin;
-    ret = timeBeginPeriod(scheduler_granularity);
-    assert(ret==TIMERR_NOERROR);
-  }
 
   global_running = true;
   while(global_running) {
@@ -189,6 +198,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     ScreenToClient(main_window, &mouse);
     global_input.mouse = (V2){ mouse.x, mouse.y };
 
+    // NOTE(leo): Calculate dt
+    {
+      LARGE_INTEGER now = { 0 };
+      QueryPerformanceCounter(&now);
+      dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
+      last_time = now;
+    }
+
     // NOTE(leo): Update game
     Image game_image = {
       .memory = global_image.memory,
@@ -199,28 +216,37 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR cmd_line, i
     bool keep_running = win32_game_update(&global_game_memory, dt, &global_input, &game_image, main_window);
     if(!keep_running)
       global_running = false;
-    RedrawWindow(main_window, 0, 0, RDW_INVALIDATE|RDW_INTERNALPAINT);
 
-    // NOTE(leo): Lock frame rate and calculate dt
-    {
-      LARGE_INTEGER now = { 0 };
-      QueryPerformanceCounter(&now);
-      dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
-      int sleep_time = (int)((target_dt - dt)*1000.0f)-1;
-      if(sleep_time > 0)
-        Sleep(sleep_time);
-      do {
-        QueryPerformanceCounter(&now);
-        dt = (F32)(((F64)now.QuadPart-(F64)last_time.QuadPart)/(F64)timer_frequency.QuadPart);
-      } while(dt < target_dt);
-      last_time = now;
-    }
-  }
+    // NOTE(leo): Draw image to window
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-  // NOTE(leo): Reset scheduler
-  {
-    MMRESULT ret = timeEndPeriod(scheduler_granularity);
-    assert(ret==TIMERR_NOERROR);
+    // TODO(leo): Stride
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, global_image.width, global_image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, global_image.memory);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    glEnable(GL_TEXTURE_2D);
+
+    glBegin(GL_TRIANGLES); {
+      glTexCoord2f(0.0f, 0.0f);
+      glVertex2f(-1.0f, -1.0f);
+      glTexCoord2f(1.0f, 0.0f);
+      glVertex2f(1.0f, -1.0f);
+      glTexCoord2f(0.0f, 1.0f);
+      glVertex2f(-1.0f, 1.0f);
+
+      glTexCoord2f(1.0f, 0.0f);
+      glVertex2f(1.0f, -1.0f);
+      glTexCoord2f(1.0f, 1.0f);
+      glVertex2f(1.0f, 1.0f);
+      glTexCoord2f(0.0f, 1.0f);
+      glVertex2f(-1.0f, 1.0f);
+    } glEnd();
+
+    glFlush();
+    SwapBuffers(GetDC(main_window));
   }
 
   return 0;

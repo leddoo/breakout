@@ -29,6 +29,11 @@ V2 v2_smul(F32 s, V2 v)
 internal
 void draw_rectangle(V2 min, V2 max, Color color, Image *image)
 {
+#define RED_SHIFT 0
+#define GREEN_SHIFT 8
+#define BLUE_SHIFT 16
+#define ALPHA_SHIFT 24
+
   int x0 = (int)roundf(min.x);
   int y0 = (int)roundf(min.y);
   int x1 = (int)roundf(max.x);
@@ -48,7 +53,7 @@ void draw_rectangle(V2 min, V2 max, Color color, Image *image)
 
 
   if(color.a == 1.0f) {
-    U32 color_packed = ((U8)(color.r*255.0f) << 16) | ((U8)(color.g*255.0f) << 8) | ((U8)(color.b*255.0f) << 0);
+    U32 color_packed = ((U8)(color.r*255.0f) << RED_SHIFT) | ((U8)(color.g*255.0f) << GREEN_SHIFT) | ((U8)(color.b*255.0f) << BLUE_SHIFT);
     for(int y = y0; y < y1; y++) {
       for(int x = x0; x < x1; x++)
         image->memory[y*image->pitch + x] = color_packed;
@@ -59,11 +64,11 @@ void draw_rectangle(V2 min, V2 max, Color color, Image *image)
       for(int x = x0; x < x1; x++) {
         U32 source_packed = image->memory[y*image->pitch + x];
         U32 mask = (1<<8)-1;
-        Color source = { (source_packed >> 16) & mask, (source_packed >> 8) & mask, (source_packed >> 0) & mask, 1.0f};
+        Color source = { (source_packed >> RED_SHIFT) & mask, (source_packed >> GREEN_SHIFT) & mask, (source_packed >> BLUE_SHIFT) & mask, 1.0f};
         // TODO(leo): srgb to linear?
         F32 t = color.a;
         Color result = { t*color.r + (1.0f-t)*source.r, t*color.g + (1.0f-t)*source.g, t*color.b + (1.0f-t)*source.b, 1.0f };
-        U32 result_packed = ((U8)(result.r*255.0f) << 16) | ((U8)(result.g*255.0f) << 8) | ((U8)(result.b*255.0f) << 0);
+        U32 result_packed = ((U8)(result.r*255.0f) << RED_SHIFT) | ((U8)(result.g*255.0f) << GREEN_SHIFT) | ((U8)(result.b*255.0f) << BLUE_SHIFT);
         image->memory[y*image->pitch + x] = result_packed;
       }
     }
