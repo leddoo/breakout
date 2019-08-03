@@ -1,6 +1,7 @@
 #include "win32_breakout.h"
 
 #include "breakout.h"
+#include "renderer.h"
 
 #include <math.h>
 
@@ -40,6 +41,7 @@ enum {
 typedef struct Win32GameState {
   GameState game_state;
   int selected;
+  RenderCmdBuffer render_cmd_buffer;
 } Win32GameState;
 
 bool button_just_pressed(Button button)
@@ -47,18 +49,38 @@ bool button_just_pressed(Button button)
   return button.is_down && !button.was_down;
 }
 
-bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image *game_image, HWND win32_window)
+#define RENDER_CMD_BUFFER_SIZE (1234*sizeof(RectangleCmd))
+
+bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND win32_window)
 {
   assert(sizeof(Win32GameState) <= sizeof(game_memory->memory));
   Win32GameState *win32_game_state = (Win32GameState *)&game_memory->memory;
   GameState *game_state = &win32_game_state->game_state;
 
-  Rect playing_area = compute_playing_area((V2) { game_image->width, game_image->height });
+  if(game_state->state == GAME_STATE_UNINITIALIZED) {
+    assert(win32_game_state->render_cmd_buffer.commands == NULL);
+    win32_game_state->render_cmd_buffer = (RenderCmdBuffer){
+      .commands = VirtualAlloc(NULL, RENDER_CMD_BUFFER_SIZE, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE),
+      .count = 0,
+      .capacity = RENDER_CMD_BUFFER_SIZE/sizeof(RectangleCmd),
+    };
+  }
+  win32_game_state->render_cmd_buffer.count = 0;
+
+  V2 window_client_dim;
+  {
+    RECT client_rect;
+    GetClientRect(win32_window, &client_rect);
+    window_client_dim.x = (F32)client_rect.right - client_rect.left;
+    window_client_dim.y = (F32)client_rect.bottom - client_rect.top;
+  }
+
+  Rect playing_area = compute_playing_area(window_client_dim);
 
   Rect paddle_motion_rect = compute_paddle_motion_rect_in_image(game_state, playing_area);
-  paddle_motion_rect.pos.y = game_image->height - paddle_motion_rect.pos.y;
+  paddle_motion_rect.pos.y = window_client_dim.y - paddle_motion_rect.pos.y;
   Rect paddle_rect = compute_paddle_rect_in_image(game_state, playing_area);
-  paddle_rect.pos.y = game_image->height - paddle_rect.pos.y;
+  paddle_rect.pos.y = window_client_dim.y - paddle_rect.pos.y;
   POINT paddle_center_screen = { paddle_rect.pos.x + paddle_rect.dim.x/2.0f, paddle_rect.pos.y - paddle_rect.dim.y/2.0f };
   ClientToScreen(win32_window, &paddle_center_screen);
 
@@ -161,7 +183,7 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
     game_input.paddle_control = (input->mouse.x - paddle_motion_rect.pos.x) / paddle_motion_rect.dim.x;
   }
 
-  game_update(&win32_game_state->game_state, dt, &game_input, game_image, playing_area);
+  game_update(&win32_game_state->game_state, dt, &game_input, &win32_game_state->render_cmd_buffer);
 
 
   char *header = NULL;
@@ -227,11 +249,11 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image
   {
     V2 cursor = { playing_area.pos.x + playing_area.dim.x/2.0f, playing_area.pos.y + playing_area.dim.y/2.0f };
     if(header) {
-      draw_text_centered(header, cursor, 8.0f, COLOR_WHITE, game_image);
+      draw_text_centered(header, cursor, 8.0f, COLOR_WHITE, &win32_game_state->render_cmd_buffer);
       cursor.y -= LINE_HEIGHT*8.0f * 1.5f;
     }
     for(int i = 0; i < text_count; i++) {
-      draw_text_centered(texts[i], cursor, 5.0f, COLOR_WHITE, game_image);
+      draw_text_centered(texts[i], cursor, 5.0f, COLOR_WHITE, &win32_game_state->render_cmd_buffer);
       cursor.y -= LINE_HEIGHT*5.0f;
     }
   }

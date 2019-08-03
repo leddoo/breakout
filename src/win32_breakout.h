@@ -17,7 +17,7 @@ typedef struct Win32Input {
   Button key_down;
 } Win32Input;
 
-bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, Image *game_image, HWND win32_window);
+bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND win32_window);
 
 bool win32_cursor_hidden(GameMemory *game_memory);
 

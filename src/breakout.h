@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util.h"
+#include "renderer.h"
 
 #define BRICK_COUNT_X 14
 #define BRICK_COUNT_Y 8
@@ -105,7 +106,7 @@ typedef struct Input {
   F32 paddle_control; // NOTE(leo): Ranges 0-1; negative value indicates "no user input"
 } Input;
 
-void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area);
+void game_update(GameState *game_state, F32 dt, Input *input, RenderCmdBuffer *cmd_buffer);
 
 void game_serve(GameState *game_state);
 
@@ -114,14 +115,8 @@ Rect compute_playing_area(V2 image_size);
 Rect compute_paddle_rect_in_image(GameState *game_state, Rect playing_area);
 Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_area);
 
-typedef struct Color {
-  F32 r, g, b, a;
-} Color;
-
-#define COLOR_WHITE ((Color){1.0f, 1.0f, 1.0f, 1.0f})
-
-void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, Image *image);
-void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Image *image);
+void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, RenderCmdBuffer *cmd_buffer);
+void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, RenderCmdBuffer *cmd_buffer);
 
 void switch_to_reset_game(GameState *game_state, bool then_switch_to_main_menu, bool erase_score);
 

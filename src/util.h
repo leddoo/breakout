@@ -27,15 +27,15 @@ typedef struct V2 {
   F32 x, y;
 } V2;
 
+typedef struct Color {
+  F32 r, g, b, a;
+} Color;
+
+#define COLOR_WHITE ((Color){1.0f, 1.0f, 1.0f, 1.0f})
+
 typedef struct Rect {
   V2 pos, dim;
 } Rect;
-
-typedef struct Image {
-  U32 *memory;
-  int width, height;
-  int pitch;
-} Image;
 
 typedef struct GameMemory {
   U8 memory[4096];

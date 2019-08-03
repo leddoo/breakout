@@ -27,52 +27,14 @@ V2 v2_smul(F32 s, V2 v)
 }
 
 internal
-void draw_rectangle(V2 min, V2 max, Color color, Image *image)
+void draw_rectangle(Rect rect, Color color, RenderCmdBuffer *cmd_buffer)
 {
-#define RED_SHIFT 0
-#define GREEN_SHIFT 8
-#define BLUE_SHIFT 16
-#define ALPHA_SHIFT 24
+  assert(cmd_buffer->count < cmd_buffer->capacity);
 
-  int x0 = (int)roundf(min.x);
-  int y0 = (int)roundf(min.y);
-  int x1 = (int)roundf(max.x);
-  int y1 = (int)roundf(max.y);
-
-  if(x1 < 0 || y1 < 0 || x0 >= image->width || y0 >= image->height)
-    return;
-
-  if(x0 < 0)
-    x0 = 0;
-  if(y0 < 0)
-    y0 = 0;
-  if(x1 > image->width)
-    x1 = image->width;
-  if(y1 > image->height)
-    y1 = image->height;
-
-
-  if(color.a == 1.0f) {
-    U32 color_packed = ((U8)(color.r*255.0f) << RED_SHIFT) | ((U8)(color.g*255.0f) << GREEN_SHIFT) | ((U8)(color.b*255.0f) << BLUE_SHIFT);
-    for(int y = y0; y < y1; y++) {
-      for(int x = x0; x < x1; x++)
-        image->memory[y*image->pitch + x] = color_packed;
-    }
-  }
-  else {
-    for(int y = y0; y < y1; y++) {
-      for(int x = x0; x < x1; x++) {
-        U32 source_packed = image->memory[y*image->pitch + x];
-        U32 mask = (1<<8)-1;
-        Color source = { (source_packed >> RED_SHIFT) & mask, (source_packed >> GREEN_SHIFT) & mask, (source_packed >> BLUE_SHIFT) & mask, 1.0f};
-        // TODO(leo): srgb to linear?
-        F32 t = color.a;
-        Color result = { t*color.r + (1.0f-t)*source.r, t*color.g + (1.0f-t)*source.g, t*color.b + (1.0f-t)*source.b, 1.0f };
-        U32 result_packed = ((U8)(result.r*255.0f) << RED_SHIFT) | ((U8)(result.g*255.0f) << GREEN_SHIFT) | ((U8)(result.b*255.0f) << BLUE_SHIFT);
-        image->memory[y*image->pitch + x] = result_packed;
-      }
-    }
-  }
+  cmd_buffer->commands[cmd_buffer->count++] = (RectangleCmd){
+    .rect = rect,
+    .color = color,
+  };
 }
 
 inline
@@ -244,7 +206,7 @@ void switch_to_reset_game(GameState *game_state, bool then_switch_to_main_menu, 
   game_state->state = GAME_STATE_RESET_GAME;
 }
 
-void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect playing_area)
+void game_update(GameState *game_state, F32 dt, Input *input, RenderCmdBuffer *cmd_buffer)
 {
   // NOTE(leo): initialization
   if(game_state->state == GAME_STATE_UNINITIALIZED)
@@ -655,21 +617,16 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     }
   }
 
-  Image playing_area_image = *image;
-  playing_area_image.memory = &image->memory[(int)playing_area.pos.y*image->pitch + (int)playing_area.pos.x];
-  playing_area_image.width = playing_area.dim.x;
-  playing_area_image.height = playing_area.dim.y;
-  F32 scale = playing_area.dim.x/PLAYING_AREA_WIDTH;
-  V2 arena_offset = v2_smul(scale, (V2) { 2.0f, 0.0f });
-
   // NOTE(leo): Draw playing area boundaries (only visible if window width is too small)
+#if 0
   draw_rectangle(v2_add(playing_area.pos, (V2) { 0.0f, -scale*2.0f }), v2_add(playing_area.pos, (V2) { playing_area.dim.x, 0.0f }), COLOR_WHITE, image);
   draw_rectangle(v2_add(playing_area.pos, (V2) { 0.0f, playing_area.dim.y }), v2_add(playing_area.pos, (V2) { playing_area.dim.x, playing_area.dim.y + scale*2.0f }), COLOR_WHITE, image);
+#endif
 
   // NOTE(leo): Draw arena
-  draw_rectangle(v2_smul(scale, (V2){0.0f, 0.0f}), v2_smul(scale, (V2){2.0f, PLAYING_AREA_HEIGHT}), COLOR_WHITE, &playing_area_image);
-  draw_rectangle(v2_smul(scale, (V2){2.0f+ARENA_WIDTH, 0.0f}), v2_smul(scale, (V2){2.0f+ARENA_WIDTH+2.0f, PLAYING_AREA_HEIGHT}), COLOR_WHITE, &playing_area_image);
-  draw_rectangle(v2_smul(scale, (V2){2.0f, ARENA_HEIGHT}), v2_smul(scale, (V2){2.0f+ARENA_WIDTH, ARENA_HEIGHT+2.0f}), COLOR_WHITE, &playing_area_image);
+  draw_rectangle((Rect) { (V2) { 0.0f, 0.0f }, (V2) { 2.0f, PLAYING_AREA_HEIGHT } }, COLOR_WHITE, cmd_buffer);
+  draw_rectangle((Rect) { (V2) { 2.0f+ARENA_WIDTH, 0.0f }, (V2) { 2.0f, PLAYING_AREA_HEIGHT } }, COLOR_WHITE, cmd_buffer);
+  draw_rectangle((Rect) { (V2) { 2.0f, ARENA_HEIGHT }, (V2) { ARENA_WIDTH, 2.0f } }, COLOR_WHITE, cmd_buffer);
 
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
@@ -680,17 +637,17 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     if(game_state->state == GAME_STATE_RESET_GAME)
       color.a = game_state->brick_alpha[brick_index];
     Rect brick_rect = compute_brick_rect(brick_index);
-    draw_rectangle(v2_add(arena_offset, v2_smul(scale, brick_rect.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(brick_rect.pos, brick_rect.dim))), color, &playing_area_image);
+    draw_rectangle(brick_rect, color, cmd_buffer);
   }
 
   // NOTE(leo): Draw paddle
-  draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->paddle.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->paddle.pos, game_state->paddle.dim))), PADDLE_COLOR, &playing_area_image);
+  draw_rectangle(game_state->paddle, PADDLE_COLOR, cmd_buffer);
 
   // NOTE(leo): Draw ball
   if((game_state->state == GAME_STATE_WAIT_SERVE) || (game_state->state == GAME_STATE_PLAYING)
     || (game_state->state == GAME_STATE_GAME_OVER) || (game_state->state == GAME_STATE_PAUSE))
   {
-    draw_rectangle(v2_add(arena_offset, v2_smul(scale, game_state->ball.pos)), v2_add(arena_offset, v2_smul(scale, v2_add(game_state->ball.pos, game_state->ball.dim))), BALL_COLOR, &playing_area_image);
+    draw_rectangle(game_state->ball, BALL_COLOR, cmd_buffer);
   }
 
   // NOTE(leo): Draw score
@@ -700,8 +657,8 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     buffer[1] = (game_state->score / 10) % 10 + '0';
     buffer[2] = (game_state->score / 1) % 10 + '0';
     buffer[3] = 0;
-    V2 cursor = v2_add(arena_offset, v2_smul(scale, (V2) { ARENA_WIDTH/2.0f + ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f }));
-    draw_text_centered(buffer, cursor, scale, COLOR_WHITE, &playing_area_image);
+    V2 cursor = (V2){ ARENA_WIDTH/2.0f + ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f };
+    draw_text_centered(buffer, cursor, 1, COLOR_WHITE, cmd_buffer);
   }
 
   // NOTE(leo): Draw ball count
@@ -711,8 +668,8 @@ void game_update(GameState *game_state, F32 dt, Input *input, Image *image, Rect
     buffer[1] = (game_state->balls_remaining / 10) % 10 + '0';
     buffer[2] = (game_state->balls_remaining / 1) % 10 + '0';
     buffer[3] = 0;
-    V2 cursor = v2_add(arena_offset, v2_smul(scale, (V2) { ARENA_WIDTH/2.0f - ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f }));
-    draw_text_centered(buffer, cursor, scale, COLOR_WHITE, &playing_area_image);
+    V2 cursor = (V2){ ARENA_WIDTH/2.0f - ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f };
+    draw_text_centered(buffer, cursor, 1, COLOR_WHITE, cmd_buffer);
   }
 }
 
@@ -767,13 +724,13 @@ Rect compute_paddle_motion_rect_in_image(GameState *game_state, Rect playing_are
   return result;
 }
 
-void draw_grid_top_down(bool *values, int width, int height, V2 bottom_left, F32 pixel_size, Color color, Image *image)
+void draw_grid_top_down(bool *values, int width, int height, V2 bottom_left, F32 pixel_size, Color color, RenderCmdBuffer *cmd_buffer)
 {
   V2 cursor = v2_add(bottom_left, (V2) { 0.0f, (height-1)*pixel_size });
   for(int y = 0; y < height; y++) {
     for(int x = 0; x < width; x++) {
       if(values[y*width + x])
-        draw_rectangle(cursor, v2_add(cursor, (V2) { pixel_size, pixel_size }), color, image);
+        draw_rectangle((Rect) { cursor, (V2) { pixel_size, pixel_size } }, color, cmd_buffer);
       cursor.x += pixel_size;
     }
     cursor.x = bottom_left.x;
@@ -781,7 +738,7 @@ void draw_grid_top_down(bool *values, int width, int height, V2 bottom_left, F32
   }
 }
 
-void draw_symbol(char symbol, V2 bottom_left, F32 pixel_size, Color color, Image *image)
+void draw_symbol(char symbol, V2 bottom_left, F32 pixel_size, Color color, RenderCmdBuffer *cmd_buffer)
 {
   bool *grid = NULL;
   switch(symbol) {
@@ -825,27 +782,27 @@ void draw_symbol(char symbol, V2 bottom_left, F32 pixel_size, Color color, Image
     case '>': { grid = grid_greater; } break;
     case ' ': { return; };
     default: {
-      draw_rectangle(bottom_left, v2_add(bottom_left, (V2) { SYMBOL_WIDTH *pixel_size, SYMBOL_HEIGHT *pixel_size }), (Color) { 1.0f, 0.0f, 1.0f, 1.0f }, image);
+      draw_rectangle((Rect) { bottom_left, (V2) { SYMBOL_WIDTH *pixel_size, SYMBOL_HEIGHT *pixel_size } }, (Color) { 1.0f, 0.0f, 1.0f, 1.0f }, cmd_buffer);
       return;
     } break;
   };
 
-  draw_grid_top_down(grid, SYMBOL_WIDTH, SYMBOL_HEIGHT, bottom_left, pixel_size, color, image);
+  draw_grid_top_down(grid, SYMBOL_WIDTH, SYMBOL_HEIGHT, bottom_left, pixel_size, color, cmd_buffer);
 }
 
-void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, Image *image)
+void draw_text(char *text, V2 bottom_left, F32 pixel_size, Color color, RenderCmdBuffer *cmd_buffer)
 {
   int symbol_count = strlen(text);
 
   V2 cursor = bottom_left;
 
   for(int i = 0; i < symbol_count; i++) {
-    draw_symbol(text[i], cursor, pixel_size, color, image);
+    draw_symbol(text[i], cursor, pixel_size, color, cmd_buffer);
     cursor.x += (SYMBOL_WIDTH+SYMBOL_SPACING)*pixel_size;
   }
 }
 
-void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Image *image)
+void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, RenderCmdBuffer *cmd_buffer)
 {
   int symbol_count = strlen(text);
 
@@ -855,5 +812,5 @@ void draw_text_centered(char *text, V2 center, F32 pixel_size, Color color, Imag
   };
   text_rect.pos = v2_sub(text_rect.pos, v2_smul(0.5f, text_rect.dim));
 
-  draw_text(text, text_rect.pos, pixel_size, color, image);
+  draw_text(text, text_rect.pos, pixel_size, color, cmd_buffer);
 }
