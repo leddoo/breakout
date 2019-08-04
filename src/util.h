@@ -27,6 +27,24 @@ typedef struct V2 {
   F32 x, y;
 } V2;
 
+inline
+V2 v2_add(V2 a, V2 b)
+{
+  return (V2) { a.x + b.x, a.y + b.y };
+}
+
+inline
+V2 v2_sub(V2 a, V2 b)
+{
+  return (V2) { a.x - b.x, a.y - b.y };
+}
+
+inline
+V2 v2_smul(F32 s, V2 v)
+{
+  return (V2) { s *v.x, s *v.y };
+}
+
 typedef struct Color {
   F32 r, g, b, a;
 } Color;

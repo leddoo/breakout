@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util.h"
+#include "renderer.h"
 
 #include <Windows.h>
 
@@ -17,7 +18,9 @@ typedef struct Win32Input {
   Button key_down;
 } Win32Input;
 
-bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND win32_window);
+#define RENDER_CMD_BUFFER_COUNT 1234
+
+bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND win32_window, RenderCmdBuffer *cmd_buffer);
 
 bool win32_cursor_hidden(GameMemory *game_memory);
 

@@ -8,24 +8,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-inline
-V2 v2_add(V2 a, V2 b)
-{
-  return (V2) { a.x + b.x, a.y + b.y };
-}
-
-inline
-V2 v2_sub(V2 a, V2 b)
-{
-  return (V2) { a.x - b.x, a.y - b.y };
-}
-
-inline
-V2 v2_smul(F32 s, V2 v)
-{
-  return (V2) { s *v.x, s *v.y };
-}
-
 internal
 void draw_rectangle(Rect rect, Color color, RenderCmdBuffer *cmd_buffer)
 {
@@ -35,6 +17,12 @@ void draw_rectangle(Rect rect, Color color, RenderCmdBuffer *cmd_buffer)
     .rect = rect,
     .color = color,
   };
+}
+
+internal
+void draw_rectangle_offset(Rect rect, V2 offset, Color color, RenderCmdBuffer *cmd_buffer)
+{
+  draw_rectangle((Rect) { .pos = v2_add(rect.pos, offset), .dim = rect.dim }, color, cmd_buffer);
 }
 
 inline
@@ -628,6 +616,8 @@ void game_update(GameState *game_state, F32 dt, Input *input, RenderCmdBuffer *c
   draw_rectangle((Rect) { (V2) { 2.0f+ARENA_WIDTH, 0.0f }, (V2) { 2.0f, PLAYING_AREA_HEIGHT } }, COLOR_WHITE, cmd_buffer);
   draw_rectangle((Rect) { (V2) { 2.0f, ARENA_HEIGHT }, (V2) { ARENA_WIDTH, 2.0f } }, COLOR_WHITE, cmd_buffer);
 
+  V2 arena_offset = { 2.0f, 0.0f };
+
   // NOTE(leo): Draw bricks
   Color brick_colors[4] = { (Color){ 0.77f, 0.78f, 0.09f, 1.0f }, (Color){ 0.0f, 0.5f, 0.13f, 1.0f }, (Color){ 0.76f, 0.51f, 0.0f, 1.0f }, (Color){ 0.63f, 0.04f, 0.0f, 1.0f } };
   for(int brick_index = 0; brick_index < BRICK_COUNT; brick_index++) {
@@ -637,17 +627,17 @@ void game_update(GameState *game_state, F32 dt, Input *input, RenderCmdBuffer *c
     if(game_state->state == GAME_STATE_RESET_GAME)
       color.a = game_state->brick_alpha[brick_index];
     Rect brick_rect = compute_brick_rect(brick_index);
-    draw_rectangle(brick_rect, color, cmd_buffer);
+    draw_rectangle_offset(brick_rect, arena_offset, color, cmd_buffer);
   }
 
   // NOTE(leo): Draw paddle
-  draw_rectangle(game_state->paddle, PADDLE_COLOR, cmd_buffer);
+  draw_rectangle_offset(game_state->paddle, arena_offset, PADDLE_COLOR, cmd_buffer);
 
   // NOTE(leo): Draw ball
   if((game_state->state == GAME_STATE_WAIT_SERVE) || (game_state->state == GAME_STATE_PLAYING)
     || (game_state->state == GAME_STATE_GAME_OVER) || (game_state->state == GAME_STATE_PAUSE))
   {
-    draw_rectangle(game_state->ball, BALL_COLOR, cmd_buffer);
+    draw_rectangle_offset(game_state->ball, arena_offset, BALL_COLOR, cmd_buffer);
   }
 
   // NOTE(leo): Draw score
@@ -657,7 +647,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, RenderCmdBuffer *c
     buffer[1] = (game_state->score / 10) % 10 + '0';
     buffer[2] = (game_state->score / 1) % 10 + '0';
     buffer[3] = 0;
-    V2 cursor = (V2){ ARENA_WIDTH/2.0f + ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f };
+    V2 cursor = (V2){ 2.0f + ARENA_WIDTH/2.0f + ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f };
     draw_text_centered(buffer, cursor, 1, COLOR_WHITE, cmd_buffer);
   }
 
@@ -668,7 +658,7 @@ void game_update(GameState *game_state, F32 dt, Input *input, RenderCmdBuffer *c
     buffer[1] = (game_state->balls_remaining / 10) % 10 + '0';
     buffer[2] = (game_state->balls_remaining / 1) % 10 + '0';
     buffer[3] = 0;
-    V2 cursor = (V2){ ARENA_WIDTH/2.0f - ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f };
+    V2 cursor = (V2){ 2.0f + ARENA_WIDTH/2.0f - ARENA_WIDTH/4.0f, ARENA_HEIGHT + (PLAYING_AREA_HEIGHT-ARENA_HEIGHT)/2.0f };
     draw_text_centered(buffer, cursor, 1, COLOR_WHITE, cmd_buffer);
   }
 }

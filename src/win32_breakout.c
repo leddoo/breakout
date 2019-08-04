@@ -41,7 +41,6 @@ enum {
 typedef struct Win32GameState {
   GameState game_state;
   int selected;
-  RenderCmdBuffer render_cmd_buffer;
 } Win32GameState;
 
 bool button_just_pressed(Button button)
@@ -49,23 +48,11 @@ bool button_just_pressed(Button button)
   return button.is_down && !button.was_down;
 }
 
-#define RENDER_CMD_BUFFER_SIZE (1234*sizeof(RectangleCmd))
-
-bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND win32_window)
+bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND win32_window, RenderCmdBuffer *cmd_buffer)
 {
   assert(sizeof(Win32GameState) <= sizeof(game_memory->memory));
   Win32GameState *win32_game_state = (Win32GameState *)&game_memory->memory;
   GameState *game_state = &win32_game_state->game_state;
-
-  if(game_state->state == GAME_STATE_UNINITIALIZED) {
-    assert(win32_game_state->render_cmd_buffer.commands == NULL);
-    win32_game_state->render_cmd_buffer = (RenderCmdBuffer){
-      .commands = VirtualAlloc(NULL, RENDER_CMD_BUFFER_SIZE, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE),
-      .count = 0,
-      .capacity = RENDER_CMD_BUFFER_SIZE/sizeof(RectangleCmd),
-    };
-  }
-  win32_game_state->render_cmd_buffer.count = 0;
 
   V2 window_client_dim;
   {
@@ -183,7 +170,7 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND 
     game_input.paddle_control = (input->mouse.x - paddle_motion_rect.pos.x) / paddle_motion_rect.dim.x;
   }
 
-  game_update(&win32_game_state->game_state, dt, &game_input, &win32_game_state->render_cmd_buffer);
+  game_update(&win32_game_state->game_state, dt, &game_input, cmd_buffer);
 
 
   char *header = NULL;
@@ -247,14 +234,25 @@ bool win32_game_update(GameMemory *game_memory, F32 dt, Win32Input *input, HWND 
   }
 
   {
-    V2 cursor = { playing_area.pos.x + playing_area.dim.x/2.0f, playing_area.pos.y + playing_area.dim.y/2.0f };
+    V2 cursor = { PLAYING_AREA_WIDTH/2.0f, PLAYING_AREA_HEIGHT/2.0f };
     if(header) {
-      draw_text_centered(header, cursor, 8.0f, COLOR_WHITE, &win32_game_state->render_cmd_buffer);
-      cursor.y -= LINE_HEIGHT*8.0f * 1.5f;
+      draw_text_centered(header, cursor, 1.5f, COLOR_WHITE, cmd_buffer);
+      cursor.y -= LINE_HEIGHT*1.5f * 1.5f;
     }
     for(int i = 0; i < text_count; i++) {
-      draw_text_centered(texts[i], cursor, 5.0f, COLOR_WHITE, &win32_game_state->render_cmd_buffer);
-      cursor.y -= LINE_HEIGHT*5.0f;
+      draw_text_centered(texts[i], cursor, 1.0f, COLOR_WHITE, cmd_buffer);
+      cursor.y -= LINE_HEIGHT*1.0f;
+    }
+  }
+
+  // NOTE(leo): Adjust rect commands to playing area
+  {
+    V2 playing_area_offset = v2_sub(v2_smul(2.0f, (V2) { playing_area.pos.x/window_client_dim.x, playing_area.pos.y/window_client_dim.y }), (V2) { 1.0f, 1.0f });
+    V2 playing_area_dim = v2_smul(2.0f, (V2) { playing_area.dim.x/window_client_dim.x, playing_area.dim.y/window_client_dim.y });
+    for(int rect_index = 0; rect_index < cmd_buffer->count; rect_index++) {
+      Rect *rect = &cmd_buffer->commands[rect_index].rect;
+      rect->pos = v2_add(playing_area_offset, (V2) { rect->pos.x/PLAYING_AREA_WIDTH*playing_area_dim.x, rect->pos.y/PLAYING_AREA_HEIGHT*playing_area_dim.y });
+      rect->dim = (V2){ rect->dim.x/PLAYING_AREA_WIDTH*playing_area_dim.x, rect->dim.y/PLAYING_AREA_HEIGHT*playing_area_dim.y };
     }
   }
 
